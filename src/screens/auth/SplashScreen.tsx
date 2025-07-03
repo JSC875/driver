@@ -13,7 +13,7 @@ const screens = [
     key: 'booking',
     illustration: (
       <View style={{ width: 300, height: 300, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Image source={require('../../../assets/images/appacella-logo-blue.png')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
+        <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
       </View>
     ),
     title: 'Welcome to ROQET',
@@ -23,7 +23,7 @@ const screens = [
     key: 'affordable',
     illustration: (
       <View style={{ width: 300, height: 300, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Image source={require('../../../assets/images/appacella-logo-blue.png')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
+        <Image source={require('../../../assets/images/Grow.jpg.jpeg')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
       </View>
     ),
     title: 'Ride Smart Earn More',
@@ -33,7 +33,7 @@ const screens = [
     key: 'safe',
     illustration: (
       <View style={{ width: 300, height: 300, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Image source={require('../../../assets/images/appacella-logo-blue.png')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
+        <Image source={require('../../../assets/images/Bossimage.jpg.jpeg')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
       </View>
     ),
     title: 'Be your own boss with ROQET',
@@ -43,7 +43,7 @@ const screens = [
     key: 'eco',
     illustration: (
       <View style={{ width: 300, height: 300, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Image source={require('../../../assets/images/appacella-logo-blue.png')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
+        <Image source={require('../../../assets/images/Community.jpg.jpeg')} style={{ width: 270, height: 270, resizeMode: 'contain' }} />
       </View>
     ),
     title: 'Youre a part of the growing community',

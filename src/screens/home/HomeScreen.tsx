@@ -1,333 +1,365 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-  SafeAreaView,
-  Animated,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useUser, useAuth } from '@clerk/clerk-expo';
-import { Colors } from '../../constants/Colors';
-import { Layout } from '../../constants/Layout';
-import { mockLocations } from '../../data/mockData';
-import { getGreeting, useAssignUserType } from '../../utils/helpers';
-import MapView, { Marker } from 'react-native-maps';
-import { useEffect } from 'react';
-import * as Location from 'expo-location';
-import { useLocationStore } from '../../store/useLocationStore';
-
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder } from 'react-native';
+import MapView from 'react-native-maps';
+import { MaterialIcons, Ionicons, FontAwesome, Entypo, FontAwesome5 } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 const { width, height } = Dimensions.get('window');
 
-const DRIVER_LOCATION = {
-  latitude: 28.6139, // Placeholder: New Delhi
-  longitude: 77.2090,
-  latitudeDelta: 0.01,
-  longitudeDelta: 0.01,
-};
+function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 28, alignItems: 'center', width: 320, elevation: 12 }}>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center', flex: 1 }}>Call</Text>
+            <Pressable onPress={onClose} style={{ marginLeft: 10 }}>
+              <Ionicons name="close-circle" size={32} color="#222" />
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 10 }}>
+            <TouchableOpacity
+              style={{ alignItems: 'center' }}
+              onPress={() => Linking.openURL('tel:108')}
+            >
+              <View style={{ backgroundColor: '#3EC6FF', borderRadius: 50, width: 90, height: 90, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                <FontAwesome5 name="ambulance" size={48} color="#fff" />
+              </View>
+              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>AMBULANCE</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ alignItems: 'center' }}
+              onPress={() => Linking.openURL('tel:100')}
+            >
+              <View style={{ backgroundColor: '#FF3B30', borderRadius: 50, width: 90, height: 90, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                <FontAwesome5 name="user-shield" size={48} color="#fff" />
+              </View>
+              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>POLICE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
-export default function HomeScreen({ navigation }: any) {
-  const { user } = useUser();
-  const {
-    pickupLocation,
-    setPickupLocation,
-    currentLocation,
-    setCurrentLocation,
-    dropoffLocation,
-    setDropoffLocation,
-  } = useLocationStore();
-  const { getToken } = useAuth();
+export default function HomeScreen() {
+  const [isSOSVisible, setSOSVisible] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const SWIPE_WIDTH = width - 48;
+  const SWIPE_THRESHOLD = SWIPE_WIDTH * 0.6;
+  const lastHaptic = useRef(Date.now());
 
-  const [region, setRegion] = useState({
-    latitude: 28.6139, // Default: New Delhi
-    longitude: 77.2090,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  });
+  // PanResponder for swipe gesture
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isOnline,
+      onMoveShouldSetPanResponder: () => !isOnline,
+      onPanResponderMove: (e, gestureState) => {
+        if (isOnline) return;
+        let newX = gestureState.dx;
+        if (newX < 0) newX = 0;
+        if (newX > SWIPE_WIDTH - 56) newX = SWIPE_WIDTH - 56;
+        swipeX.setValue(newX);
+        // Throttle haptic feedback
+        const now = Date.now();
+        if (now - lastHaptic.current > 60) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          lastHaptic.current = now;
+        }
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        if (isOnline) return;
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          Animated.timing(swipeX, {
+            toValue: SWIPE_WIDTH - 56,
+            duration: 120,
+            useNativeDriver: false,
+          }).start(() => {
+            setIsOnline(true);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          });
+        } else {
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
-  const [isOnline, setIsOnline] = useState(true);
-  const [ridesToday, setRidesToday] = useState(5); // Placeholder
-  const [earningsToday, setEarningsToday] = useState(1200); // Placeholder
-  const [swipeAnim] = useState(new Animated.Value(isOnline ? 1 : 0));
-
-  useAssignUserType('user');
-
-  // On mount, get current location and set as pickup if not set
-  useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        return;
-      }
-      let loc = await Location.getCurrentPositionAsync({});
-      const coords = {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-        address: 'Current Location',
-      };
-      setCurrentLocation(coords);
-      if (!pickupLocation) {
-        setPickupLocation(coords);
-      }
-      setRegion({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // When pickup or dropoff location changes, update map region
-  useEffect(() => {
-    if (dropoffLocation) {
-      setRegion((prev) => ({
-        ...prev,
-        latitude: dropoffLocation.latitude,
-        longitude: dropoffLocation.longitude,
-      }));
-    } else if (pickupLocation) {
-      setRegion((prev) => ({
-        ...prev,
-        latitude: pickupLocation.latitude,
-        longitude: pickupLocation.longitude,
-      }));
-    }
-  }, [pickupLocation, dropoffLocation]);
-
-  useEffect(() => {
-    (async () => {
-      const token = await getToken();
-      console.log('Clerk JWT token:', token);
-    })();
-  }, [getToken]);
-
-  const handleLocationSearch = (type: 'pickup' | 'destination') => {
-    navigation.navigate('LocationSearch', { type });
-  };
-
-  const handleQuickLocation = (location: any) => {
-    navigation.navigate('RideEstimate', { destination: location });
-  };
-
-  const handleRideHistory = () => {
-    // Navigate to the History tab
-    navigation.navigate('History');
-  };
-
-  const handleSupport = () => {
-    navigation.navigate('HelpSupport');
-  };
-
-  const getUserName = () => {
-    if (user?.firstName) {
-      return user.firstName;
-    } else if (user?.fullName) {
-      return user.fullName.split(' ')[0];
-    }
-    return 'User';
-  };
-
-  // Animate swipe toggle
-  const handleToggleOnline = () => {
-    setIsOnline((prev) => !prev);
-    Animated.timing(swipeAnim, {
-      toValue: isOnline ? 0 : 1,
-      duration: 300,
+  const resetOnline = () => {
+    setIsOnline(false);
+    Animated.spring(swipeX, {
+      toValue: 0,
       useNativeDriver: false,
     }).start();
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Map View */}
+    <View style={{ flex: 1 }}>
+      {/* Map */}
       <MapView
-        style={StyleSheet.absoluteFill}
-        initialRegion={DRIVER_LOCATION}
-        region={DRIVER_LOCATION}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
+        style={{ flex: 1 }}
+        initialRegion={{
+          latitude: 17.4375, // Example: Hyderabad
+          longitude: 78.4483,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        showsUserLocation
+      />
+      {/* Test Ride Request Button */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          bottom: 170,
+          right: 24,
+          backgroundColor: '#1877f2',
+          borderRadius: 32,
+          paddingVertical: 16,
+          paddingHorizontal: 28,
+          elevation: 6,
+          zIndex: 100,
+        }}
+        onPress={() => {}}
       >
-        <Marker coordinate={DRIVER_LOCATION} title="You (Driver)" />
-      </MapView>
-
-      {/* Top Header (minimal, Uber-style) */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.openDrawer && navigation.openDrawer()}>
-          <Ionicons name="menu" size={28} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerSpacer} />
-        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation.navigate('NotificationsScreen')}>
-          <Ionicons name="options" size={24} color={Colors.text} />
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Test Ride Request</Text>
+      </TouchableOpacity>
+      {/* Top Bar Overlay */}
+      <View style={styles.topBar}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={styles.menuButton} onPress={() => {}}>
+            <Entypo name="menu" size={28} color="#222" />
+            <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
           </TouchableOpacity>
-      </View>
-
-      {/* Bottom Card (online/offline state) */}
-      <View style={[styles.bottomCard, isOnline ? styles.onlineCard : styles.offlineCard]}>  
-        <Text style={[styles.bottomCardTitle, isOnline ? styles.onlineText : styles.offlineText]}>
-          {isOnline ? "You're online" : "You're offline"}
-        </Text>
-        <Text style={styles.bottomCardSubtitle}>
-          {isOnline ? 'Waiting for ride requests...' : 'Go online to start receiving rides.'}
-        </Text>
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Ionicons name="car" size={20} color={isOnline ? Colors.primary : Colors.gray400} />
-            <Text style={styles.statValue}>{ridesToday}</Text>
-            <Text style={styles.statLabel}>Rides</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="cash" size={20} color={isOnline ? Colors.primary : Colors.gray400} />
-            <Text style={styles.statValue}>₹{earningsToday}</Text>
-            <Text style={styles.statLabel}>Earnings</Text>
-          </View>
         </View>
-      </View>
-
-      {/* Go Online/Go Offline Button (full width, bottom) */}
-      <View style={styles.bottomButtonContainer}>
-        <TouchableOpacity
-          style={[styles.bottomButton, isOnline ? styles.goOfflineBtn : styles.goOnlineBtn]}
-          onPress={handleToggleOnline}
-        >
-          <Text style={[styles.bottomButtonText, isOnline ? styles.goOfflineText : styles.goOnlineText]}>
-            {isOnline ? 'Go Offline' : 'Go Online'}
-          </Text>
+        <View style={styles.speedPill}>
+          <Text style={styles.speedZero}>0</Text>
+          <Text style={styles.speedZero}> | </Text>
+          <Text style={styles.speedLimit}>80</Text>
+        </View>
+        <TouchableOpacity style={styles.iconCircle}>
+          <Ionicons name="search" size={24} color="#222" />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      {/* Center Marker */}
+      <View style={styles.centerMarker}>
+        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
+      </View>
+      {/* Bottom Swipe Button Overlay */}
+      <View style={styles.swipeBarContainer}>
+        <View style={[styles.swipeBarBg, isOnline && { backgroundColor: '#00C853' }]}/>
+        {!isOnline ? (
+          <View style={styles.swipeBarContent}>
+            <Text style={styles.swipeBarText}>Swipe to go online</Text>
+            <Animated.View
+              {...panResponder.panHandlers}
+              style={[styles.swipeCircle, { transform: [{ translateX: swipeX }] }]}
+            >
+              <Ionicons name="arrow-forward" size={28} color="#00C853" />
+            </Animated.View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.onlineBarContent} onPress={resetOnline}>
+            <Text style={styles.onlineBarText}>You're online</Text>
+            <Ionicons name="power" size={24} color="#fff" style={{ marginLeft: 10 }} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Floating SOS Button */}
+      <TouchableOpacity
+        style={styles.sosButton}
+        onPress={() => setSOSVisible(true)}
+      >
+        <Text style={styles.sosText}>SOS</Text>
+      </TouchableOpacity>
+      {/* SOS Modal */}
+      <SOSModal visible={isSOSVisible} onClose={() => setSOSVisible(false)} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  headerContainer: {
+  topBar: {
     position: 'absolute',
-    top: Layout.spacing.lg,
+    top: 40,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Layout.spacing.lg,
+    alignItems: 'center',
+    paddingHorizontal: 18,
     zIndex: 10,
   },
-  headerIcon: {
-    backgroundColor: Colors.white,
+  menuButton: {
+    backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
     elevation: 2,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
-  headerSpacer: {
-    flex: 1,
-  },
-  bottomCard: {
+  badge: {
     position: 'absolute',
-    left: Layout.spacing.lg,
-    right: Layout.spacing.lg,
-    bottom: 80,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.borderRadius.lg,
-    padding: Layout.spacing.lg,
+    top: 4,
+    right: 4,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 16,
     alignItems: 'center',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    justifyContent: 'center',
   },
-  onlineCard: {
-    borderColor: Colors.primary,
-    borderWidth: 1.5,
-  },
-  offlineCard: {
-    borderColor: Colors.gray300,
-    borderWidth: 1.5,
-    backgroundColor: Colors.gray50,
-  },
-  bottomCardTitle: {
-    fontSize: Layout.fontSize.lg,
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
     fontWeight: 'bold',
-    marginBottom: 4,
   },
-  onlineText: {
-    color: Colors.primary,
-  },
-  offlineText: {
-    color: Colors.gray400,
-  },
-  bottomCardSubtitle: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
-    marginBottom: Layout.spacing.lg,
-  },
-  statsRow: {
+  speedPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: Layout.spacing.sm,
-  },
-  statBox: {
-    flex: 1,
+    backgroundColor: '#111',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
     alignItems: 'center',
+    minWidth: 60,
+    justifyContent: 'center',
   },
-  statValue: {
-    fontSize: Layout.fontSize.lg,
+  speedZero: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: Colors.text,
+    marginRight: 4,
   },
-  statLabel: {
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
+  speedLimit: {
+    color: '#00C853',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
-  bottomButtonContainer: {
+  iconCircle: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  centerMarker: {
+    position: 'absolute',
+    top: height / 2 - 32,
+    left: width / 2 - 16,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 4,
+    elevation: 4,
+    zIndex: -1,
+  },
+  swipeBarContainer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.white,
-    padding: Layout.spacing.md,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 8,
+    height: 90,
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 20,
   },
-  bottomButton: {
-    width: '100%',
-    borderRadius: 24,
-    paddingVertical: 16,
+  swipeBarBg: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 90,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    elevation: 10,
+  },
+  swipeBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: width - 48,
+    height: 56,
+    backgroundColor: '#f2f2f2',
+    borderRadius: 28,
+    marginHorizontal: 24,
+    marginBottom: 18,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  swipeBarText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#00C853',
+    fontWeight: 'bold',
+    fontSize: 20,
+    zIndex: 1,
+  },
+  swipeCircle: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  onlineBarContent: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    width: width - 48,
+    height: 56,
+    backgroundColor: '#00C853',
+    borderRadius: 28,
+    marginHorizontal: 24,
+    marginBottom: 18,
   },
-  goOnlineBtn: {
-    backgroundColor: Colors.primary,
-  },
-  goOfflineBtn: {
-    backgroundColor: Colors.gray400,
-  },
-  bottomButtonText: {
-    fontSize: Layout.fontSize.lg,
+  onlineBarText: {
+    color: '#fff',
     fontWeight: 'bold',
+    fontSize: 20,
   },
-  goOnlineText: {
-    color: Colors.white,
+  sosButton: {
+    position: 'absolute',
+    bottom: '40%',
+    right: 20,
+    backgroundColor: '#FF3B30',
+    borderRadius: 32,
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 10,
+    zIndex: 99999,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  goOfflineText: {
-    color: Colors.white,
+  sosText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 22,
+    letterSpacing: 1,
   },
 });
