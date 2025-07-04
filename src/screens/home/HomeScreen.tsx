@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder, TextInput } from 'react-native';
 import MapView from 'react-native-maps';
 import { MaterialIcons, Ionicons, FontAwesome, Entypo, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import RideRequestScreen, { RideRequest } from '../../components/RideRequestScreen';
 const { width, height } = Dimensions.get('window');
 
 function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -47,6 +48,77 @@ function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void 
   );
 }
 
+function NavigationScreen({ ride, onNavigate, onArrived }: { ride: RideRequest, onNavigate: () => void, onArrived: () => void }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Directions to User</Text>
+      <Text style={{ fontSize: 18, marginBottom: 8 }}>Pickup: {ride.pickupAddress}</Text>
+      <Text style={{ fontSize: 18, marginBottom: 8 }}>Dropoff: {ride.dropoffAddress}</Text>
+      <Text style={{ fontSize: 18, marginBottom: 24 }}>ETA: {ride.pickup}</Text>
+      <TouchableOpacity
+        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginBottom: 18 }}
+        onPress={onNavigate}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Navigate in Google Maps</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={{ backgroundColor: '#00C853', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
+        onPress={onArrived}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Arrived at Pickup</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function OtpScreen({ onSubmit }: { onSubmit: (otp: string) => void }) {
+  const [otp, setOtp] = useState('');
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Enter OTP</Text>
+      <Text style={{ fontSize: 18, marginBottom: 24 }}>Ask the user for their OTP to start the ride.</Text>
+      <View style={{ flexDirection: 'row', marginBottom: 24 }}>
+        <TextInput
+          style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, fontSize: 24, padding: 12, width: 120, textAlign: 'center' }}
+          keyboardType="number-pad"
+          maxLength={6}
+          value={otp}
+          onChangeText={setOtp}
+        />
+      </View>
+      <TouchableOpacity
+        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
+        onPress={() => onSubmit(otp)}
+        disabled={otp.length < 4}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Submit OTP</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RideInProgressScreen({ ride, onNavigate, onEnd }: { ride: RideRequest, onNavigate: () => void, onEnd: () => void }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Ride In Progress</Text>
+      <Text style={{ fontSize: 18, marginBottom: 8 }}>From: {ride.pickupAddress}</Text>
+      <Text style={{ fontSize: 18, marginBottom: 8 }}>To: {ride.dropoffAddress}</Text>
+      <TouchableOpacity
+        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginBottom: 18 }}
+        onPress={onNavigate}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Navigate to Dropoff</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={{ backgroundColor: '#FF3B30', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
+        onPress={onEnd}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>End Ride</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
@@ -54,6 +126,10 @@ export default function HomeScreen() {
   const SWIPE_WIDTH = width - 48;
   const SWIPE_THRESHOLD = SWIPE_WIDTH * 0.6;
   const lastHaptic = useRef(Date.now());
+  const [rideRequest, setRideRequest] = useState<RideRequest | null>(null);
+  const [navigationRide, setNavigationRide] = useState<RideRequest | null>(null);
+  const [showOtp, setShowOtp] = useState(false);
+  const [rideInProgress, setRideInProgress] = useState<RideRequest | null>(null);
 
   // PanResponder for swipe gesture
   const panResponder = useRef(
@@ -89,7 +165,7 @@ export default function HomeScreen() {
             toValue: 0,
             useNativeDriver: false,
           }).start();
-        }
+    }
       },
     })
   ).current;
@@ -101,6 +177,65 @@ export default function HomeScreen() {
       useNativeDriver: false,
     }).start();
   };
+
+  const handleTestRideRequest = () => {
+    setRideRequest({
+      id: '1',
+      price: '₹120.00',
+      type: 'Mini',
+      tag: 'Hyderabad',
+      rating: '4.95',
+      verified: true,
+      pickup: '5 min (2.1 km) away',
+      pickupAddress: 'Hitech City, Hyderabad, Telangana',
+      dropoff: '25 min (12.3 km) trip',
+      dropoffAddress: 'Charminar, Hyderabad, Telangana',
+    });
+  };
+
+  const handleAcceptRide = () => {
+    if (rideRequest) {
+      setNavigationRide(rideRequest);
+      setRideRequest(null);
+    }
+  };
+
+  const handleRejectRide = () => {
+    setRideRequest(null);
+  };
+
+  const handleNavigate = () => {
+    if (navigationRide) {
+      const address = encodeURIComponent(navigationRide.pickupAddress);
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+      Linking.openURL(url);
+    }
+  };
+
+  const handleArrived = () => {
+    setShowOtp(true);
+  };
+
+  const handleOtpSubmit = (otp: string) => {
+    setShowOtp(false);
+    setRideInProgress(navigationRide);
+    setNavigationRide(null);
+    Alert.alert('OTP Verified', 'You can now start the ride!');
+  };
+
+  const handleNavigateToDropoff = () => {
+    if (rideInProgress) {
+      const address = encodeURIComponent(rideInProgress.dropoffAddress);
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+      Linking.openURL(url);
+    }
+  };
+
+  const handleEndRide = () => {
+    setRideInProgress(null);
+  };
+
+  const isRideActive = !!(rideRequest || navigationRide || showOtp || rideInProgress);
 
   return (
     <View style={{ flex: 1 }}>
@@ -115,23 +250,25 @@ export default function HomeScreen() {
         }}
         showsUserLocation
       />
-      {/* Test Ride Request Button */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          bottom: 170,
-          right: 24,
-          backgroundColor: '#1877f2',
-          borderRadius: 32,
-          paddingVertical: 16,
-          paddingHorizontal: 28,
-          elevation: 6,
-          zIndex: 100,
-        }}
-        onPress={() => {}}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Test Ride Request</Text>
-      </TouchableOpacity>
+      {/* Test Ride Request Button (hide if ride in progress) */}
+      {!isRideActive && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: 170,
+            right: 24,
+            backgroundColor: '#1877f2',
+            borderRadius: 32,
+            paddingVertical: 16,
+            paddingHorizontal: 28,
+            elevation: 6,
+            zIndex: 100,
+          }}
+          onPress={handleTestRideRequest}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Test Ride Request</Text>
+        </TouchableOpacity>
+      )}
       {/* Top Bar Overlay */}
       <View style={styles.topBar}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -147,12 +284,12 @@ export default function HomeScreen() {
         </View>
         <TouchableOpacity style={styles.iconCircle}>
           <Ionicons name="search" size={24} color="#222" />
-        </TouchableOpacity>
+          </TouchableOpacity>
       </View>
       {/* Center Marker */}
       <View style={styles.centerMarker}>
         <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
-      </View>
+          </View>
       {/* Bottom Swipe Button Overlay */}
       <View style={styles.swipeBarContainer}>
         <View style={[styles.swipeBarBg, isOnline && { backgroundColor: '#00C853' }]}/>
@@ -174,14 +311,43 @@ export default function HomeScreen() {
         )}
       </View>
       {/* Floating SOS Button */}
-      <TouchableOpacity
+        <TouchableOpacity
         style={styles.sosButton}
         onPress={() => setSOSVisible(true)}
-      >
+        >
         <Text style={styles.sosText}>SOS</Text>
-      </TouchableOpacity>
+        </TouchableOpacity>
       {/* SOS Modal */}
       <SOSModal visible={isSOSVisible} onClose={() => setSOSVisible(false)} />
+      {/* Ride Request Modal */}
+      {rideRequest && (
+        <RideRequestScreen
+          ride={rideRequest}
+          onClose={handleRejectRide}
+          onAccept={handleAcceptRide}
+          onReject={handleRejectRide}
+        />
+      )}
+      {/* Navigation Screen */}
+      {navigationRide && !showOtp && (
+        <NavigationScreen
+          ride={navigationRide}
+          onNavigate={handleNavigate}
+          onArrived={handleArrived}
+        />
+      )}
+      {/* OTP Screen */}
+      {navigationRide && showOtp && (
+        <OtpScreen onSubmit={handleOtpSubmit} />
+      )}
+      {/* Ride In Progress Screen */}
+      {rideInProgress && (
+        <RideInProgressScreen
+          ride={rideInProgress}
+          onNavigate={handleNavigateToDropoff}
+          onEnd={handleEndRide}
+        />
+      )}
     </View>
   );
 }
