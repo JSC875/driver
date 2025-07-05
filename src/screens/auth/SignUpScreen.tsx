@@ -11,7 +11,9 @@ import {
   FlatList, 
   TextInput, 
   Image, 
-  Alert 
+  Alert,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +22,8 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+
+const { width, height } = Dimensions.get('window');
 
 // Types
 interface NameStepProps {
@@ -70,32 +74,67 @@ interface CountryItem {
 
 // Step 1: Name Entry
 function NameStep({ firstName, lastName, setFirstName, setLastName, onNext }: NameStepProps) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   return (
-    <View style={styles.stepContainer}>
-      <Text style={styles.progress}>Step 1 of 4</Text>
-      <Text style={styles.stepTitle}>What's your name?</Text>
-      <Input
-        label="First Name"
-        placeholder="Enter your first name"
-        value={firstName}
-        onChangeText={setFirstName}
-        leftIcon="person"
-      />
-      <Input
-        label="Last Name"
-        placeholder="Enter your last name"
-        value={lastName}
-        onChangeText={setLastName}
-        leftIcon="person"
-      />
-      <Button
-        title="Next"
-        onPress={onNext}
-        fullWidth
-        disabled={!firstName.trim()}
-        style={{ marginTop: 24 }}
-      />
-    </View>
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: '25%' }]} />
+        </View>
+        <Text style={styles.progress}>Step 1 of 4</Text>
+      </View>
+      
+      <View style={styles.headerContainer}>
+        <View style={styles.iconContainer}>
+          <Ionicons name="person" size={48} color="#1877f2" />
+        </View>
+        <Text style={styles.stepTitle}>What's your name?</Text>
+        <Text style={styles.stepSubtitle}>Let's get to know you better</Text>
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Input
+          label="First Name"
+          placeholder="Enter your first name"
+          value={firstName}
+          onChangeText={setFirstName}
+          leftIcon="person"
+        />
+        <Input
+          label="Last Name"
+          placeholder="Enter your last name"
+          value={lastName}
+          onChangeText={setLastName}
+          leftIcon="person"
+        />
+      </View>
+
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Next"
+          onPress={onNext}
+          fullWidth
+          disabled={!firstName.trim()}
+        />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -111,6 +150,24 @@ function PhoneStep({
   onBack, 
   isLoading 
 }: PhoneStepProps) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const countryList: CountryItem[] = [
     { code: '+91', name: 'India' },
     { code: '+1', name: 'USA' },
@@ -125,26 +182,41 @@ function PhoneStep({
   ];
 
   return (
-    <View style={styles.stepContainer}>
-      <Text style={styles.progress}>Step 2 of 4</Text>
-      <Text style={styles.stepTitle}>What's your mobile number?</Text>
-      <Input
-        label="Mobile Number"
-        placeholder="Enter your 10-digit mobile number"
-        value={phoneNumber}
-        onChangeText={setPhoneNumber}
-        keyboardType="phone-pad"
-        maxLength={10}
-        leftElement={
-          <TouchableOpacity
-            onPress={() => setCountryModalVisible(true)}
-            style={styles.countryCodeButton}
-          >
-            <Text style={styles.countryCodeText}>{countryCode}</Text>
-            <Ionicons name="chevron-down" size={18} color={Colors.gray400} />
-          </TouchableOpacity>
-        }
-      />
+    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: '50%' }]} />
+        </View>
+        <Text style={styles.progress}>Step 2 of 4</Text>
+      </View>
+      
+      <View style={styles.headerContainer}>
+        <View style={styles.iconContainer}>
+          <Ionicons name="phone-portrait" size={48} color="#1877f2" />
+        </View>
+        <Text style={styles.stepTitle}>What's your mobile number?</Text>
+        <Text style={styles.stepSubtitle}>We'll send you a verification code</Text>
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Input
+          label="Mobile Number"
+          placeholder="Enter your 10-digit mobile number"
+          value={phoneNumber}
+          onChangeText={setPhoneNumber}
+          keyboardType="phone-pad"
+          maxLength={10}
+          leftElement={
+            <TouchableOpacity
+              onPress={() => setCountryModalVisible(true)}
+              style={styles.countryCodeButton}
+            >
+              <Text style={styles.countryCodeText}>{countryCode}</Text>
+              <Ionicons name="chevron-down" size={18} color="#666" />
+            </TouchableOpacity>
+          }
+        />
+      </View>
       
       {/* Country Code Modal */}
       <Modal
@@ -161,7 +233,7 @@ function PhoneStep({
                 onPress={() => setCountryModalVisible(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color="#222" />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -185,22 +257,23 @@ function PhoneStep({
         </View>
       </Modal>
       
-      <Button
-        title="Send OTP"
-        onPress={onNext}
-        fullWidth
-        loading={isLoading}
-        disabled={phoneNumber.length !== 10}
-        style={{ marginTop: 24 }}
-      />
-      <Button
-        title="Back"
-        onPress={onBack}
-        fullWidth
-        variant="secondary"
-        style={{ marginTop: 12 }}
-      />
-    </View>
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Send OTP"
+          onPress={onNext}
+          fullWidth
+          loading={isLoading}
+          disabled={phoneNumber.length !== 10}
+        />
+        <Button
+          title="Back"
+          onPress={onBack}
+          fullWidth
+          variant="secondary"
+          style={{ marginTop: 12 }}
+        />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -625,18 +698,53 @@ const styles = StyleSheet.create({
   stepContainer: {
     marginTop: 40,
   },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  progressBar: {
+    height: 10,
+    backgroundColor: Colors.gray200,
+    borderRadius: 5,
+    flex: 1,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: 5,
+  },
   progress: {
     color: Colors.primary,
     fontWeight: '600',
+    marginLeft: 8,
+  },
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  iconContainer: {
+    backgroundColor: Colors.gray100,
+    padding: 16,
+    borderRadius: 80,
     marginBottom: 16,
-    textAlign: 'center',
   },
   stepTitle: {
     fontSize: Layout.fontSize.xxl,
     fontWeight: 'bold',
     color: Colors.text,
-    marginBottom: 32,
+    marginBottom: 16,
+  },
+  stepSubtitle: {
+    color: Colors.textSecondary,
     textAlign: 'center',
+    fontSize: 14,
+  },
+  inputContainer: {
+    marginBottom: 24,
+  },
+  buttonContainer: {
+    marginTop: 24,
   },
   countryCodeButton: {
     flexDirection: 'row',

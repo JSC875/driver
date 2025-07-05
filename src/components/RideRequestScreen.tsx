@@ -74,7 +74,7 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
     <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}> 
       <Animated.View style={[styles.cardContainer, { transform: [{ translateY: cardAnim.interpolate({ inputRange: [0, 100], outputRange: [0, 500] }) }] }]}> 
         {/* Close Button */}
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
         </TouchableOpacity>
         {/* Top Pills */}

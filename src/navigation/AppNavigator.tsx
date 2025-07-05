@@ -57,52 +57,6 @@ import { Layout } from '../constants/Layout';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-function TabNavigator() {
-  return (
-    <Tab.Navigator
-      id={undefined}
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'History') {
-            iconName = focused ? 'time' : 'time-outline';
-          } else if (route.name === 'Wallet') {
-            iconName = focused ? 'wallet' : 'wallet-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          } else {
-            iconName = 'home-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.gray400,
-        tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.border,
-          paddingBottom: Layout.spacing.sm,
-          paddingTop: Layout.spacing.sm,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: Layout.fontSize.xs,
-          fontWeight: '600',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="History" component={RideHistoryScreen} />
-      <Tab.Screen name="Wallet" component={WalletScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
-  );
-}
-
 function AuthNavigator() {
   return (
     <Stack.Navigator
@@ -127,22 +81,17 @@ function MainNavigator() {
   return (
     <Stack.Navigator
       id={undefined}
-      initialRouteName="TabNavigator"
+      initialRouteName="Home"
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
       }}
     >
-      {/* Main App with Tabs */}
-      <Stack.Screen name="TabNavigator" component={TabNavigator} />
-      
-      {/* Home Flow */}
-      <Stack.Screen name="LocationSearch" component={LocationSearchScreen} />
+      <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen name="RideEstimate" component={RideEstimateScreen} />
       <Stack.Screen name="ConfirmRide" component={ConfirmRideScreen} />
       <Stack.Screen name="ScheduleRide" component={ScheduleRideScreen} />
       <Stack.Screen name="Offers" component={OffersScreen} />
-      
       {/* Support Flow */}
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="RideIssues" component={RideIssuesScreen} />
@@ -157,14 +106,15 @@ function MainNavigator() {
       <Stack.Screen name="PaymentsIssues" component={PaymentsIssuesScreen} />
       <Stack.Screen name="OtherIssues" component={OtherIssuesScreen} />
       <Stack.Screen name="TermsCondition" component={TermsConditionScreen} />
-      
       {/* Ride Flow */}
       <Stack.Screen name="FindingDriver" component={FindingDriverScreen} />
       <Stack.Screen name="LiveTracking" component={LiveTrackingScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="RideSummary" component={RideSummaryScreen} />
-      
       {/* Profile Flow */}
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="RideHistory" component={RideHistoryScreen} />
+      <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />

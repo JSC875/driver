@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,8 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { mockPaymentMethods } from '../../data/mockData';
 import Button from '../../components/common/Button';
+
+const { width } = Dimensions.get('window');
 
 const walletTransactions = [
   {
@@ -45,92 +48,116 @@ const walletTransactions = [
 export default function WalletScreen({ navigation }: any) {
   const [walletBalance] = useState(1250);
   const [selectedTab, setSelectedTab] = useState('wallet');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+    ]).start();
+  }, []);
 
   const renderPaymentMethod = ({ item }: any) => (
-    <TouchableOpacity style={styles.paymentMethodCard}>
-      <View style={styles.paymentMethodLeft}>
-        <View style={styles.paymentMethodIcon}>
-          <Ionicons
-            name={item.type === 'upi' ? 'card' : item.type === 'card' ? 'card' : 'cash'}
-            size={24}
-            color={Colors.primary}
-          />
-        </View>
-        <View style={styles.paymentMethodInfo}>
-          <Text style={styles.paymentMethodName}>{item.name}</Text>
-          <Text style={styles.paymentMethodIdentifier}>{item.identifier}</Text>
-        </View>
-      </View>
-      <View style={styles.paymentMethodActions}>
-        {item.isDefault && (
-          <View style={styles.defaultBadge}>
-            <Text style={styles.defaultText}>Default</Text>
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <TouchableOpacity style={styles.paymentMethodCard} activeOpacity={0.7}>
+        <View style={styles.paymentMethodLeft}>
+          <View style={styles.paymentMethodIcon}>
+            <Ionicons
+              name={item.type === 'upi' ? 'card' : item.type === 'card' ? 'card' : 'cash'}
+              size={24}
+              color={Colors.primary}
+            />
           </View>
-        )}
-        <TouchableOpacity style={styles.moreButton}>
-          <Ionicons name="ellipsis-vertical" size={20} color={Colors.gray400} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+          <View style={styles.paymentMethodInfo}>
+            <Text style={styles.paymentMethodName}>{item.name}</Text>
+            <Text style={styles.paymentMethodIdentifier}>{item.identifier}</Text>
+          </View>
+        </View>
+        <View style={styles.paymentMethodActions}>
+          {item.isDefault && (
+            <View style={styles.defaultBadge}>
+              <Text style={styles.defaultText}>Default</Text>
+            </View>
+          )}
+          <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
+            <Ionicons name="ellipsis-vertical" size={20} color={Colors.gray400} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   const renderTransaction = ({ item }: any) => (
-    <View style={styles.transactionItem}>
-      <View style={styles.transactionLeft}>
-        <View
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <View style={styles.transactionItem}>
+        <View style={styles.transactionLeft}>
+          <View
+            style={[
+              styles.transactionIcon,
+              item.type === 'credit' ? styles.creditIcon : styles.debitIcon,
+            ]}
+          >
+            <Ionicons
+              name={item.type === 'credit' ? 'add' : 'remove'}
+              size={20}
+              color={Colors.white}
+            />
+          </View>
+          <View style={styles.transactionInfo}>
+            <Text style={styles.transactionDescription}>{item.description}</Text>
+            <Text style={styles.transactionDate}>
+              {item.date} • {item.time}
+            </Text>
+          </View>
+        </View>
+        <Text
           style={[
-            styles.transactionIcon,
-            item.type === 'credit' ? styles.creditIcon : styles.debitIcon,
+            styles.transactionAmount,
+            item.type === 'credit' ? styles.creditAmount : styles.debitAmount,
           ]}
         >
-          <Ionicons
-            name={item.type === 'credit' ? 'add' : 'remove'}
-            size={20}
-            color={Colors.white}
-          />
-        </View>
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionDescription}>{item.description}</Text>
-          <Text style={styles.transactionDate}>
-            {item.date} • {item.time}
-          </Text>
-        </View>
+          {item.type === 'credit' ? '+' : '-'}₹{item.amount}
+        </Text>
       </View>
-      <Text
-        style={[
-          styles.transactionAmount,
-          item.type === 'credit' ? styles.creditAmount : styles.debitAmount,
-        ]}
-      >
-        {item.type === 'credit' ? '+' : '-'}₹{item.amount}
-      </Text>
-    </View>
+    </Animated.View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Wallet & Payments</Text>
-        <TouchableOpacity style={styles.helpButton}>
+        <TouchableOpacity style={styles.helpButton} activeOpacity={0.7}>
           <Ionicons name="help-circle-outline" size={24} color={Colors.text} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Tabs */}
-      <View style={styles.tabsContainer}>
+      <Animated.View style={[styles.tabsContainer, { opacity: fadeAnim }]}>
         <TouchableOpacity
           style={[
             styles.tab,
             selectedTab === 'wallet' && styles.activeTab,
           ]}
           onPress={() => setSelectedTab('wallet')}
+          activeOpacity={0.7}
         >
           <Text
             style={[
@@ -147,6 +174,7 @@ export default function WalletScreen({ navigation }: any) {
             selectedTab === 'payments' && styles.activeTab,
           ]}
           onPress={() => setSelectedTab('payments')}
+          activeOpacity={0.7}
         >
           <Text
             style={[
@@ -157,13 +185,13 @@ export default function WalletScreen({ navigation }: any) {
             Payment Methods
           </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {selectedTab === 'wallet' ? (
           <>
             {/* Wallet Balance */}
-            <View style={styles.walletCard}>
+            <Animated.View style={[styles.walletCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <View style={styles.balanceContainer}>
                 <Text style={styles.balanceLabel}>Wallet Balance</Text>
                 <Text style={styles.balanceAmount}>₹{walletBalance}</Text>
@@ -174,30 +202,30 @@ export default function WalletScreen({ navigation }: any) {
                   onPress={() => console.log('Add money')}
                   style={styles.addMoneyButton}
                 />
-                <TouchableOpacity style={styles.sendMoneyButton}>
+                <TouchableOpacity style={styles.sendMoneyButton} activeOpacity={0.7}>
                   <Ionicons name="send" size={20} color={Colors.primary} />
                   <Text style={styles.sendMoneyText}>Send</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Quick Add Amounts */}
-            <View style={styles.quickAddCard}>
+            <Animated.View style={[styles.quickAddCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <Text style={styles.quickAddTitle}>Quick Add</Text>
               <View style={styles.quickAddButtons}>
                 {[100, 200, 500, 1000].map((amount) => (
-                  <TouchableOpacity key={amount} style={styles.quickAddButton}>
+                  <TouchableOpacity key={amount} style={styles.quickAddButton} activeOpacity={0.7}>
                     <Text style={styles.quickAddText}>₹{amount}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
+            </Animated.View>
 
             {/* Recent Transactions */}
-            <View style={styles.transactionsCard}>
+            <Animated.View style={[styles.transactionsCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <View style={styles.transactionsHeader}>
                 <Text style={styles.transactionsTitle}>Recent Transactions</Text>
-                <TouchableOpacity>
+                <TouchableOpacity activeOpacity={0.7}>
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
@@ -207,7 +235,7 @@ export default function WalletScreen({ navigation }: any) {
                 keyExtractor={(item) => item.id}
                 scrollEnabled={false}
               />
-            </View>
+            </Animated.View>
           </>
         ) : (
           <>
@@ -340,9 +368,10 @@ const styles = StyleSheet.create({
     marginBottom: Layout.spacing.sm,
   },
   balanceAmount: {
-    fontSize: Layout.fontSize.xxxl,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.white,
+    color: Colors.text,
+    marginTop: Layout.spacing.xs,
   },
   walletActions: {
     flexDirection: 'row',

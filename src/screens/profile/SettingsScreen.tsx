@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,17 +6,39 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 
+const { width } = Dimensions.get('window');
+
 export default function SettingsScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
   const [locationServices, setLocationServices] = useState(true);
   const [autoPayment, setAutoPayment] = useState(false);
   const [shareData, setShareData] = useState(true);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }),
+    ]).start();
+  }, []);
 
   const settingSections = [
     {
@@ -128,10 +149,11 @@ export default function SettingsScreen({ navigation }: any) {
       style={styles.settingItem}
       onPress={item.action}
       disabled={item.toggle}
+      activeOpacity={0.7}
     >
       <View style={styles.settingLeft}>
         <View style={styles.settingIcon}>
-          <Ionicons name={item.icon} size={20} color={Colors.gray600} />
+          <Ionicons name={item.icon} size={20} color={Colors.primary} />
         </View>
         <View style={styles.settingInfo}>
           <Text style={styles.settingTitle}>{item.title}</Text>
@@ -156,32 +178,36 @@ export default function SettingsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {settingSections.map((section, sectionIndex) => (
-          <View key={sectionIndex} style={styles.section}>
+          <Animated.View 
+            key={sectionIndex} 
+            style={[styles.section, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+          >
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <View style={styles.sectionCard}>
               {section.items.map((item, itemIndex) => renderSettingItem(item, itemIndex))}
             </View>
-          </View>
+          </Animated.View>
         ))}
 
         {/* App Info */}
-        <View style={styles.appInfo}>
+        <Animated.View style={[styles.appInfo, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <Text style={styles.appVersion}>RideSwift v1.0.0</Text>
           <Text style={styles.appBuild}>Build 2024.01.15</Text>
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -201,9 +227,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   backButton: {
     padding: Layout.spacing.sm,
+    borderRadius: 20,
+    backgroundColor: Colors.gray50,
   },
   headerTitle: {
     fontSize: Layout.fontSize.lg,
@@ -223,8 +256,8 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.md,
     fontWeight: '600',
     color: Colors.text,
-    marginBottom: Layout.spacing.sm,
     marginHorizontal: Layout.spacing.lg,
+    marginBottom: Layout.spacing.sm,
   },
   sectionCard: {
     backgroundColor: Colors.white,
@@ -232,14 +265,15 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.lg,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+    overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Layout.spacing.lg,
     paddingVertical: Layout.spacing.md,
     borderBottomWidth: 1,
@@ -264,7 +298,7 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: Layout.fontSize.md,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.text,
   },
   settingSubtitle: {
@@ -273,19 +307,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   settingRight: {
-    marginLeft: Layout.spacing.md,
+    alignItems: 'center',
   },
   appInfo: {
     alignItems: 'center',
     paddingVertical: Layout.spacing.xl,
+    marginTop: Layout.spacing.lg,
   },
   appVersion: {
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.text,
   },
   appBuild: {
-    fontSize: Layout.fontSize.xs,
-    color: Colors.textLight,
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
     marginTop: Layout.spacing.xs,
   },
 });

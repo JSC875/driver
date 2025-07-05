@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +17,8 @@ import { useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+
+const { width, height } = Dimensions.get('window');
 
 export default function OTPVerificationScreen({ navigation, route }: any) {
   const { phoneNumber, isSignIn } = route.params;
@@ -27,6 +31,32 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   const { signUp, setActive: setSignUpActive } = useSignUp();
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -70,26 +100,22 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     setIsLoading(true);
 
     try {
-      if (isSignIn) {
-        // Sign in flow
-        const completeSignIn = await signIn?.attemptFirstFactor({
+      if (isSignIn && signIn) {
+        const completeSignIn = await signIn.attemptFirstFactor({
           strategy: 'phone_code',
           code: otpString,
         });
 
         if (completeSignIn?.status === 'complete') {
           await setSignInActive({ session: completeSignIn.createdSessionId });
-          // Don't navigate manually - the auth state change will handle it
         }
-      } else {
-        // Sign up flow
-        const completeSignUp = await signUp?.attemptPhoneNumberVerification({
+      } else if (signUp) {
+        const completeSignUp = await signUp.attemptPhoneNumberVerification({
           code: otpString,
         });
 
         if (completeSignUp?.status === 'complete') {
           await setSignUpActive({ session: completeSignUp.createdSessionId });
-          // Navigate to profile setup for new users
           navigation.navigate('ProfileSetup');
         }
       }
@@ -103,9 +129,8 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
 
   const handleResendOTP = async () => {
     try {
-      if (isSignIn) {
-        // For sign in, we need to get the phone number factor again
-        const { supportedFirstFactors } = await signIn?.create({
+      if (isSignIn && signIn) {
+        const { supportedFirstFactors } = await signIn.create({
           identifier: phoneNumber,
         });
 
@@ -114,13 +139,13 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
         }) as any;
 
         if (phoneNumberFactor) {
-          await signIn?.prepareFirstFactor({
+          await signIn.prepareFirstFactor({
             strategy: 'phone_code',
             phoneNumberId: phoneNumberFactor.phoneNumberId,
           });
         }
-      } else {
-        await signUp?.preparePhoneNumberVerification({ strategy: 'phone_code' });
+      } else if (signUp) {
+        await signUp.preparePhoneNumberVerification({ strategy: 'phone_code' });
       }
       
       setTimer(30);
@@ -140,25 +165,28 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <View style={styles.header}>
+        <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            <Ionicons name="arrow-back" size={24} color="#222" />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        <View style={styles.content}>
-          <View style={styles.titleContainer}>
+        <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View style={[styles.titleContainer, { transform: [{ scale: scaleAnim }] }]}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="shield-checkmark" size={48} color="#1877f2" />
+            </View>
             <Text style={styles.title}>Verify OTP</Text>
             <Text style={styles.subtitle}>
               We've sent a 6-digit code to{'\n'}
               <Text style={styles.phoneNumber}>{phoneNumber}</Text>
             </Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.otpContainer}>
+          <Animated.View style={[styles.otpContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             {otp.map((digit, index) => (
               <TextInput
                 key={index}
@@ -179,28 +207,34 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
                 textAlign="center"
               />
             ))}
-          </View>
+          </Animated.View>
 
-          <View style={styles.resendContainer}>
+          <Animated.View style={[styles.resendContainer, { opacity: fadeAnim }]}>
             {canResend ? (
-              <TouchableOpacity onPress={handleResendOTP}>
+              <TouchableOpacity onPress={handleResendOTP} style={styles.resendButton}>
+                <Ionicons name="refresh" size={16} color="#1877f2" style={{ marginRight: 8 }} />
                 <Text style={styles.resendText}>Resend OTP</Text>
               </TouchableOpacity>
             ) : (
-              <Text style={styles.timerText}>
-                Resend OTP in {timer}s
-              </Text>
+              <View style={styles.timerContainer}>
+                <Ionicons name="time" size={16} color="#999" style={{ marginRight: 8 }} />
+                <Text style={styles.timerText}>
+                  Resend OTP in {timer}s
+                </Text>
+              </View>
             )}
-          </View>
+          </Animated.View>
 
-          <Button
-            title="Verify & Continue"
-            onPress={handleVerifyOTP}
-            loading={isLoading}
-            fullWidth
-            disabled={otp.join('').length !== 6}
-          />
-        </View>
+          <Animated.View style={[styles.buttonContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <Button
+              title="Verify & Continue"
+              onPress={handleVerifyOTP}
+              loading={isLoading}
+              fullWidth
+              disabled={otp.join('').length !== 6}
+            />
+          </Animated.View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -209,7 +243,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: '#fff',
   },
   keyboardView: {
     flex: 1,
@@ -217,68 +251,120 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.md,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   backButton: {
-    padding: Layout.spacing.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   content: {
     flex: 1,
-    paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.xl,
+    paddingHorizontal: 24,
+    paddingTop: 20,
   },
   titleContainer: {
     alignItems: 'center',
-    marginBottom: Layout.spacing.xxl,
+    marginBottom: 40,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(24, 119, 242, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#1877f2',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   title: {
-    fontSize: Layout.fontSize.xxl,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: Layout.spacing.md,
+    color: '#222',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   phoneNumber: {
+    color: '#1877f2',
     fontWeight: '600',
-    color: Colors.text,
   },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Layout.spacing.lg,
+    marginBottom: 32,
+    paddingHorizontal: 20,
   },
   otpInput: {
-    width: 50,
-    height: 50,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Layout.borderRadius.md,
-    fontSize: Layout.fontSize.lg,
-    fontWeight: '600',
-    color: Colors.text,
-    backgroundColor: Colors.gray50,
+    width: 48,
+    height: 56,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#222',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   otpInputFilled: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.white,
+    borderColor: '#1877f2',
+    backgroundColor: 'rgba(24, 119, 242, 0.05)',
+    shadowColor: '#1877f2',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   resendContainer: {
     alignItems: 'center',
-    marginBottom: Layout.spacing.xl,
+    marginBottom: 32,
+  },
+  resendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(24, 119, 242, 0.1)',
+    borderRadius: 20,
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
   resendText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.primary,
+    fontSize: 16,
+    color: '#1877f2',
     fontWeight: '600',
   },
   timerText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: '#999',
+  },
+  buttonContainer: {
+    marginTop: 'auto',
+    paddingBottom: 20,
   },
 });

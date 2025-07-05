@@ -10,6 +10,8 @@ import {
   Alert,
   Modal,
   TouchableWithoutFeedback,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +20,8 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+
+const { width, height } = Dimensions.get('window');
 
 const COUNTRY_CODES = [
   { code: '+91', label: 'IN' },
@@ -30,6 +34,25 @@ export default function LoginScreen({ navigation }: any) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, setActive, isLoaded } = useSignIn();
+
+  // Animation values
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(50)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleSendOTP = async () => {
     if (!isLoaded) return;
@@ -120,35 +143,39 @@ export default function LoginScreen({ navigation }: any) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.iconContainer}>
-              <Ionicons name="bicycle" size={60} color={Colors.primary} />
+              <Ionicons name="bicycle" size={60} color="#1877f2" />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
               Enter your mobile number to sign in
             </Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.form}>
-            <Input
-              label="Mobile Number"
-              placeholder="Enter your 10-digit mobile number"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              maxLength={10}
-              leftElement={renderCountryCodeSelector()}
-            />
+          <Animated.View style={[styles.form, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <View style={styles.inputContainer}>
+              <Input
+                label="Mobile Number"
+                placeholder="Enter your 10-digit mobile number"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
+                maxLength={10}
+                leftElement={renderCountryCodeSelector()}
+              />
+            </View>
 
-            <Button
-              title="Send OTP"
-              onPress={handleSendOTP}
-              loading={isLoading}
-              fullWidth
-              disabled={phoneNumber.length !== 10}
-            />
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Send OTP"
+                onPress={handleSendOTP}
+                loading={isLoading}
+                fullWidth
+                disabled={phoneNumber.length !== 10}
+              />
+            </View>
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -161,15 +188,15 @@ export default function LoginScreen({ navigation }: any) {
                 Don't have an account? <Text style={styles.signUpLink}>Sign Up</Text>
               </Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
-          <View style={styles.footer}>
+          <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
             <Text style={styles.termsText}>
               By continuing, you agree to our{' '}
               <Text style={styles.linkText}>Terms of Service</Text> and{' '}
               <Text style={styles.linkText}>Privacy Policy</Text>
             </Text>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -179,131 +206,154 @@ export default function LoginScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: '#fff',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Layout.spacing.lg,
+    paddingHorizontal: 24,
   },
   header: {
     alignItems: 'center',
-    paddingTop: Layout.spacing.xxl,
-    paddingBottom: Layout.spacing.xl,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.gray50,
-    alignItems: 'center',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(24, 119, 242, 0.1)',
     justifyContent: 'center',
-    marginBottom: Layout.spacing.lg,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#1877f2',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   title: {
-    fontSize: Layout.fontSize.xxl,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: Layout.spacing.sm,
+    color: '#222',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   form: {
     flex: 1,
-    paddingTop: Layout.spacing.lg,
+    paddingHorizontal: 8,
+  },
+  inputContainer: {
+    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  buttonContainer: {
+    marginBottom: 24,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: Layout.spacing.lg,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: '#e0e0e0',
   },
   dividerText: {
-    marginHorizontal: Layout.spacing.md,
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
+    marginHorizontal: 16,
+    color: '#999',
+    fontSize: 14,
+    fontWeight: '500',
   },
   signUpButton: {
     alignItems: 'center',
-    paddingVertical: Layout.spacing.md,
+    paddingVertical: 16,
   },
   signUpText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: '#666',
   },
   signUpLink: {
-    color: Colors.primary,
+    color: '#1877f2',
     fontWeight: '600',
   },
   footer: {
-    paddingVertical: Layout.spacing.lg,
+    paddingBottom: 24,
+    alignItems: 'center',
   },
   termsText: {
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
+    fontSize: 12,
+    color: '#999',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   linkText: {
-    color: Colors.primary,
-    fontWeight: '600',
+    color: '#1877f2',
+    fontWeight: '500',
   },
   countryCodeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Layout.spacing.md,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Layout.borderRadius.md,
+    borderColor: '#e0e0e0',
   },
   countryCodeText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.text,
-    marginRight: Layout.spacing.sm,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginRight: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: Layout.borderRadius.lg,
-    borderTopRightRadius: Layout.borderRadius.lg,
-    padding: Layout.spacing.xl,
-    paddingBottom: Layout.spacing.xl + 20,
+    backgroundColor: '#fff',
+    marginTop: 'auto',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalTitle: {
-    fontSize: Layout.fontSize.lg,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: Layout.spacing.lg,
+    color: '#222',
+    marginBottom: 16,
     textAlign: 'center',
   },
   modalItem: {
-    paddingVertical: Layout.spacing.md,
-    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   modalItemText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.text,
+    fontSize: 16,
+    color: '#333',
   },
 });

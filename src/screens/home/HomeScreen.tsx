@@ -1,9 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder, TextInput } from 'react-native';
-import MapView from 'react-native-maps';
+import MapView, { Marker, Polyline as MapPolyline, MapViewProps } from 'react-native-maps';
 import { MaterialIcons, Ionicons, FontAwesome, Entypo, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import RideRequestScreen, { RideRequest } from '../../components/RideRequestScreen';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'react-native';
+import Polyline from '@mapbox/polyline';
 const { width, height } = Dimensions.get('window');
 
 function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -48,76 +54,552 @@ function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void 
   );
 }
 
-function NavigationScreen({ ride, onNavigate, onArrived }: { ride: RideRequest, onNavigate: () => void, onArrived: () => void }) {
+// Helper: Geocode address to lat/lng
+async function geocodeAddress(address: string, apiKey: string) {
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.results && data.results[0]) {
+    return data.results[0].geometry.location;
+  }
+  throw new Error('Geocoding failed');
+}
+
+// Helper: Fetch directions and decode polyline
+async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, lng: number}, apiKey: string) {
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.routes && data.routes[0]) {
+    const points = Polyline.decode(data.routes[0].overview_polyline.points);
+    return points.map(([latitude, longitude]) => ({ latitude, longitude }));
+  }
+  throw new Error('Directions fetch failed');
+}
+
+const GOOGLE_MAPS_API_KEY = 'AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU';
+
+function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: RideRequest, onNavigate: () => void, onArrived: () => void, onClose: () => void }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
+  const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
+  const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
+  const mapRef = useRef<MapView>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
+        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        setPickupCoord(pickup);
+        setDropoffCoord(dropoff);
+        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+        setRouteCoords(route);
+      } catch (e) {
+        // handle error
+      }
+    })();
+  }, [ride.pickupAddress, ride.dropoffAddress]);
+
+  useEffect(() => {
+    if (routeCoords.length > 1 && mapRef.current) {
+      mapRef.current.fitToCoordinates(routeCoords, { edgePadding: { top: 100, right: 100, bottom: 100, left: 100 }, animated: true });
+    }
+  }, [routeCoords]);
+
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, []);
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Directions to User</Text>
-      <Text style={{ fontSize: 18, marginBottom: 8 }}>Pickup: {ride.pickupAddress}</Text>
-      <Text style={{ fontSize: 18, marginBottom: 8 }}>Dropoff: {ride.dropoffAddress}</Text>
-      <Text style={{ fontSize: 18, marginBottom: 24 }}>ETA: {ride.pickup}</Text>
-      <TouchableOpacity
-        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginBottom: 18 }}
-        onPress={onNavigate}
+    <Animated.View style={{
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: '#fff',
+      opacity: anim,
+      zIndex: 9999,
+    }}>
+      {/* Full Screen Map */}
+      <MapView
+        ref={mapRef}
+        provider="google"
+        style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+        }}
+        initialRegion={{
+          latitude: pickupCoord?.lat || 17.4375,
+          longitude: pickupCoord?.lng || 78.4483,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        showsUserLocation
       >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Navigate in Google Maps</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={{ backgroundColor: '#00C853', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
-        onPress={onArrived}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Arrived at Pickup</Text>
-      </TouchableOpacity>
-    </View>
+        {pickupCoord && (
+          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+        )}
+        {dropoffCoord && (
+          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+        )}
+        {routeCoords.length > 1 && (
+          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+        )}
+      </MapView>
+      
+      {/* Top Routing Bar */}
+      <Animated.View style={{
+        position: 'absolute',
+        top: 0, left: 0, right: 0,
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        paddingTop: 50,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 5 },
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-50, 0] }) }],
+      }}>
+        {/* Close Button */}
+        <TouchableOpacity 
+          onPress={onClose} 
+          style={{ 
+            position: 'absolute', 
+            top: 60, 
+            right: 20, 
+            zIndex: 10, 
+            backgroundColor: 'rgba(0,0,0,0.1)', 
+            borderRadius: 20, 
+            padding: 8,
+            width: 40,
+            height: 40,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="close" size={24} color="#333" />
+        </TouchableOpacity>
+        
+        {/* Route Header */}
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <View style={{ backgroundColor: '#1877f2', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Ionicons name="navigate" size={28} color="#fff" />
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Navigate to Pickup</Text>
+          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>ETA: {ride.pickup}</Text>
+        </View>
+
+        {/* Route Information */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
+          {/* Pickup */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name="location" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Pickup</Text>
+              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
+            </View>
+          </View>
+          
+          {/* Arrow */}
+          <View style={{ marginHorizontal: 12 }}>
+            <Ionicons name="arrow-down" size={20} color="#999" />
+          </View>
+          
+          {/* Dropoff */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name="flag" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
+              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Bottom Action Buttons */}
+      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
+        <View style={{ gap: 12 }}>
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#1877f2', 
+              borderRadius: 16, 
+              paddingVertical: 18, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#1877f2',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={onNavigate}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#00C853', 
+              borderRadius: 16, 
+              paddingVertical: 18, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#00C853',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={onArrived}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Arrived at Pickup</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
 
-function OtpScreen({ onSubmit }: { onSubmit: (otp: string) => void }) {
+function OtpScreen({ onSubmit, onClose }: { onSubmit: (otp: string) => void, onClose: () => void }) {
   const [otp, setOtp] = useState('');
+  const anim = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, []);
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Enter OTP</Text>
-      <Text style={{ fontSize: 18, marginBottom: 24 }}>Ask the user for their OTP to start the ride.</Text>
-      <View style={{ flexDirection: 'row', marginBottom: 24 }}>
-        <TextInput
-          style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, fontSize: 24, padding: 12, width: 120, textAlign: 'center' }}
-          keyboardType="number-pad"
-          maxLength={6}
-          value={otp}
-          onChangeText={setOtp}
-        />
-      </View>
-      <TouchableOpacity
-        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
-        onPress={() => onSubmit(otp)}
-        disabled={otp.length < 4}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Submit OTP</Text>
-      </TouchableOpacity>
-    </View>
+    <Animated.View style={{
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      justifyContent: 'center', alignItems: 'center',
+      backgroundColor: anim.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)'] }),
+      opacity: anim,
+      zIndex: 9999,
+    }}>
+      <Animated.View style={{
+        width: width - 32,
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        borderRadius: 24,
+        padding: 32,
+        elevation: 20,
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 15 },
+        alignItems: 'center',
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] }) }],
+      }}>
+        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
+          <Ionicons name="close" size={26} color="#888" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16, color: '#222' }}>Enter OTP</Text>
+        <Text style={{ fontSize: 18, marginBottom: 24, color: '#444' }}>Ask the user for their OTP to start the ride.</Text>
+        <View style={{ flexDirection: 'row', marginBottom: 24 }}>
+          <TextInput
+            style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, fontSize: 24, padding: 12, width: 120, textAlign: 'center', backgroundColor: '#f9f9f9' }}
+            keyboardType="number-pad"
+            maxLength={6}
+            value={otp}
+            onChangeText={setOtp}
+          />
+        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: otp.length < 4 ? '#b0b0b0' : '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
+          onPress={() => onSubmit(otp)}
+          disabled={otp.length < 4}
+          activeOpacity={otp.length < 4 ? 1 : 0.8}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Submit OTP</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
-function RideInProgressScreen({ ride, onNavigate, onEnd }: { ride: RideRequest, onNavigate: () => void, onEnd: () => void }) {
+function RideInProgressScreen({ ride, onNavigate, onEnd, onClose }: { ride: RideRequest, onNavigate: () => void, onEnd: () => void, onClose: () => void }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+  const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
+  const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
+  const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
+  const mapRef = useRef<MapView>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
+        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        setPickupCoord(pickup);
+        setDropoffCoord(dropoff);
+        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+        setRouteCoords(route);
+      } catch (e) {
+        // handle error
+      }
+    })();
+  }, [ride.pickupAddress, ride.dropoffAddress]);
+
+  useEffect(() => {
+    if (routeCoords.length > 1 && mapRef.current) {
+      mapRef.current.fitToCoordinates(routeCoords, { edgePadding: { top: 100, right: 100, bottom: 100, left: 100 }, animated: true });
+    }
+  }, [routeCoords]);
+
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, []);
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16 }}>Ride In Progress</Text>
-      <Text style={{ fontSize: 18, marginBottom: 8 }}>From: {ride.pickupAddress}</Text>
-      <Text style={{ fontSize: 18, marginBottom: 8 }}>To: {ride.dropoffAddress}</Text>
-      <TouchableOpacity
-        style={{ backgroundColor: '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginBottom: 18 }}
-        onPress={onNavigate}
+    <Animated.View style={{
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: '#fff',
+      opacity: anim,
+      zIndex: 9999,
+    }}>
+      {/* Full Screen Map */}
+      <MapView
+        ref={mapRef}
+        provider="google"
+        style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+        }}
+        initialRegion={{
+          latitude: pickupCoord?.lat || 17.4375,
+          longitude: pickupCoord?.lng || 78.4483,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+        showsUserLocation
       >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Navigate to Dropoff</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={{ backgroundColor: '#FF3B30', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32 }}
-        onPress={onEnd}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>End Ride</Text>
-      </TouchableOpacity>
-    </View>
+        {pickupCoord && (
+          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+        )}
+        {dropoffCoord && (
+          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+        )}
+        {routeCoords.length > 1 && (
+          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+        )}
+      </MapView>
+      
+      {/* Top Routing Bar */}
+      <Animated.View style={{
+        position: 'absolute',
+        top: 0, left: 0, right: 0,
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        paddingTop: 50,
+        paddingBottom: 20,
+        paddingHorizontal: 20,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 5 },
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-50, 0] }) }],
+      }}>
+        {/* Close Button */}
+        <TouchableOpacity 
+          onPress={onClose} 
+          style={{ 
+            position: 'absolute', 
+            top: 60, 
+            right: 20, 
+            zIndex: 10, 
+            backgroundColor: 'rgba(0,0,0,0.1)', 
+            borderRadius: 20, 
+            padding: 8,
+            width: 40,
+            height: 40,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Ionicons name="close" size={24} color="#333" />
+        </TouchableOpacity>
+        
+        {/* Route Header */}
+        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+          <View style={{ backgroundColor: '#00C853', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Ionicons name="car" size={28} color="#fff" />
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
+          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
+        </View>
+
+        {/* Route Information */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
+          {/* Pickup */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name="checkmark" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Pickup Complete</Text>
+              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
+            </View>
+          </View>
+          
+          {/* Arrow */}
+          <View style={{ marginHorizontal: 12 }}>
+            <Ionicons name="arrow-down" size={20} color="#999" />
+          </View>
+          
+          {/* Dropoff */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Ionicons name="flag" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
+              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Bottom Action Buttons */}
+      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
+        <View style={{ gap: 12 }}>
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#1877f2', 
+              borderRadius: 16, 
+              paddingVertical: 18, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#1877f2',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={onNavigate}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#FF3B30', 
+              borderRadius: 16, 
+              paddingVertical: 18, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#FF3B30',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={onEnd}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="stop-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>End Ride</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </Animated.View>
   );
 }
+
+const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: boolean; onClose: () => void; onNavigate: (screen: string) => void; halfScreen?: boolean }) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        <Animated.View style={{
+          backgroundColor: '#fff',
+          borderTopRightRadius: 24,
+          borderBottomRightRadius: 24,
+          padding: 28,
+          width: Math.round(width * 0.7),
+          height: '100%',
+          elevation: 16,
+          shadowColor: '#000',
+          shadowOpacity: 0.18,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 15 },
+          alignItems: 'stretch',
+          justifyContent: 'flex-start',
+        }}>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 18, textAlign: 'center' }}>Menu</Text>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Home'); onClose(); }}>
+            <Ionicons name="home" size={24} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#222' }}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('RideHistory'); onClose(); }}>
+            <Ionicons name="time" size={24} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#222' }}>Ride History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Wallet'); onClose(); }}>
+            <Ionicons name="wallet" size={24} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#222' }}>Wallet</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Settings'); onClose(); }}>
+            <Ionicons name="settings" size={24} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#222' }}>Settings</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('HelpSupport'); onClose(); }}>
+            <Ionicons name="help-circle" size={24} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#222' }}>Support</Text>
+          </TouchableOpacity>
+          <View style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onClose}>
+            <Ionicons name="log-out" size={24} color="#FF3B30" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 18, color: '#FF3B30' }}>Logout</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        {halfScreen && (
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} activeOpacity={1} />
+        )}
+      </View>
+    </Modal>
+  );
+};
 
 export default function HomeScreen() {
   const [isSOSVisible, setSOSVisible] = useState(false);
@@ -130,6 +612,11 @@ export default function HomeScreen() {
   const [navigationRide, setNavigationRide] = useState<RideRequest | null>(null);
   const [showOtp, setShowOtp] = useState(false);
   const [rideInProgress, setRideInProgress] = useState<RideRequest | null>(null);
+  const sosAnim = useRef(new Animated.Value(1)).current;
+  const navigation = useNavigation<NavigationProp<any>>();
+  const [menuVisible, setMenuVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [safetyModalVisible, setSafetyModalVisible] = useState(false);
 
   // PanResponder for swipe gesture
   const panResponder = useRef(
@@ -237,8 +724,49 @@ export default function HomeScreen() {
 
   const isRideActive = !!(rideRequest || navigationRide || showOtp || rideInProgress);
 
+  // Play notification sound on ride request
+  useEffect(() => {
+    if (rideRequest) {
+      // Play haptic feedback immediately
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Try to play sound with better error handling
+      (async () => {
+        try {
+          // Use a simple beep sound that's more reliable
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' },
+            { 
+              shouldPlay: true, 
+              volume: 1.0,
+              isLooping: false 
+            }
+          );
+          
+          // Play the sound
+          await sound.playAsync();
+          
+          // Clean up sound after playing
+          setTimeout(async () => {
+            try {
+              await sound.unloadAsync();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }, 1500);
+        } catch (e) {
+          console.log('Sound not available, using haptic only');
+          // Fallback to just haptic feedback - this is already working
+        }
+      })();
+    }
+  }, [rideRequest]);
+
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
+      {/* StatusBar background fix for edge-to-edge */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: '#fff', zIndex: 10000 }} />
+      <StatusBar barStyle="dark-content" translucent />
       {/* Map */}
       <MapView
         style={{ flex: 1 }}
@@ -249,9 +777,80 @@ export default function HomeScreen() {
           longitudeDelta: 0.05,
         }}
         showsUserLocation
+        scrollEnabled={isOnline}
+        zoomEnabled={isOnline}
+        rotateEnabled={isOnline}
+        pitchEnabled={isOnline}
       />
-      {/* Test Ride Request Button (hide if ride in progress) */}
-      {!isRideActive && (
+      {/* Overall Offline Overlay */}
+      {!isOnline && !isRideActive && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            zIndex: 1000,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {/* Offline Icon */}
+          <View
+            style={{
+              backgroundColor: '#B0B3B8',
+              borderRadius: 50,
+              width: 80,
+              height: 80,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+              shadowColor: '#B0B3B8',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+          >
+            <Ionicons name="wifi-outline" size={40} color="#222" />
+            {/* Diagonal slash overlay */}
+            <View
+              style={{
+                position: 'absolute',
+                width: 60,
+                height: 6,
+                backgroundColor: '#D32F2F', // red for visibility
+                borderRadius: 3,
+                top: 37,
+                left: 10,
+                transform: [{ rotate: '-25deg' }],
+                opacity: 0.95,
+              }}
+            />
+          </View>
+          
+          {/* Offline Text */}
+          <Text
+            style={{
+              fontSize: 34,
+              fontWeight: '900',
+              color: '#222',
+              textAlign: 'center',
+              textShadowColor: 'rgba(255,255,255,0.7)',
+              textShadowOffset: { width: 0, height: 2 },
+              textShadowRadius: 6,
+              letterSpacing: 0.5,
+              marginTop: 4,
+            }}
+          >
+            You're Offline
+          </Text>
+        </View>
+      )}
+      {/* Test Ride Request Button (show only when online and no ride in progress) */}
+      {isOnline && !isRideActive && (
         <TouchableOpacity
           style={{
             position: 'absolute',
@@ -261,62 +860,231 @@ export default function HomeScreen() {
             borderRadius: 32,
             paddingVertical: 16,
             paddingHorizontal: 28,
-            elevation: 6,
+            elevation: 8,
             zIndex: 100,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
           }}
           onPress={handleTestRideRequest}
+          activeOpacity={0.7}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Test Ride Request</Text>
+          <Animated.Text
+            style={{
+              color: '#fff',
+              fontWeight: 'bold',
+              fontSize: 18,
+            }}
+          >
+            Test Ride Request
+          </Animated.Text>
         </TouchableOpacity>
       )}
       {/* Top Bar Overlay */}
-      <View style={styles.topBar}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={styles.menuButton} onPress={() => {}}>
-            <Entypo name="menu" size={28} color="#222" />
-            <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
-          </TouchableOpacity>
-        </View>
+      <Animated.View
+        style={[
+          styles.topBar,
+          {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 12,
+            elevation: 10,
+            backgroundColor: 'rgba(255,255,255,0.96)',
+            borderRadius: 18,
+            margin: 16,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            alignSelf: 'center',
+            width: '92%',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          },
+        ]}
+      >
+        <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+          <Entypo name="menu" size={28} color="#222" />
+          <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
+        </TouchableOpacity>
         <View style={styles.speedPill}>
           <Text style={styles.speedZero}>0</Text>
           <Text style={styles.speedZero}> | </Text>
           <Text style={styles.speedLimit}>80</Text>
         </View>
-        <TouchableOpacity style={styles.iconCircle}>
-          <Ionicons name="search" size={24} color="#222" />
-          </TouchableOpacity>
-      </View>
-      {/* Center Marker */}
-      <View style={styles.centerMarker}>
-        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
-          </View>
-      {/* Bottom Swipe Button Overlay */}
-      <View style={styles.swipeBarContainer}>
-        <View style={[styles.swipeBarBg, isOnline && { backgroundColor: '#00C853' }]}/>
-        {!isOnline ? (
-          <View style={styles.swipeBarContent}>
-            <Text style={styles.swipeBarText}>Swipe to go online</Text>
-            <Animated.View
-              {...panResponder.panHandlers}
-              style={[styles.swipeCircle, { transform: [{ translateX: swipeX }] }]}
-            >
-              <Ionicons name="arrow-forward" size={28} color="#00C853" />
-            </Animated.View>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.onlineBarContent} onPress={resetOnline}>
-            <Text style={styles.onlineBarText}>You're online</Text>
-            <Ionicons name="power" size={24} color="#fff" style={{ marginLeft: 10 }} />
-          </TouchableOpacity>
-        )}
-      </View>
-      {/* Floating SOS Button */}
-        <TouchableOpacity
-        style={styles.sosButton}
-        onPress={() => setSOSVisible(true)}
-        >
-        <Text style={styles.sosText}>SOS</Text>
+        <TouchableOpacity style={styles.iconCircle} onPress={() => navigation.navigate('Profile')}>
+          <Ionicons name="person-circle" size={32} color="#222" />
         </TouchableOpacity>
+      </Animated.View>
+      {/* Center Marker */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: '48%',
+          left: '50%',
+          transform: [{ translateX: -20 }, { translateY: -32 }],
+          backgroundColor: '#fff',
+          borderRadius: 16,
+          padding: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 8,
+        }}
+      >
+        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
+      </Animated.View>
+      {/* Bottom Online/Offline Bar */}
+      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
+        {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 10 }}>
+            <View style={{
+              width: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#00C853',
+              borderRadius: 32,
+              paddingVertical: 16,
+              paddingHorizontal: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 12,
+              elevation: 10,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: 22,
+                  letterSpacing: 0.5,
+                }}>
+                  You're ONLINE
+                </Text>
+              </View>
+              <TouchableOpacity onPress={resetOnline} style={{ marginLeft: 12 }}>
+                <Ionicons name="power" size={28} color="#FF3B30" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </SafeAreaView>
+      {/* Swipe to Go Online Bar (show only if offline and not in ride) */}
+      {!isOnline && !isRideActive && (
+        <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
+          <View style={{
+            width: '100%',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            {/* Safety Toolkit Icon - left of swipe bar */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: 24,
+                width: 48,
+                height: 48,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 6,
+                marginRight: 12,
+              }}
+              onPress={() => setSafetyModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="shield-checkmark" size={28} color="#22C55E" />
+            </TouchableOpacity>
+            {/* Swipe Bar */}
+            <View style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#1A2233',
+              borderRadius: 32,
+              paddingVertical: 16,
+              paddingHorizontal: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 12,
+              elevation: 10,
+            }}
+            {...panResponder.panHandlers}
+            >
+              <Animated.View style={{
+                position: 'absolute',
+                left: swipeX,
+                top: 0,
+                bottom: 0,
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: '#26304A',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#26304A',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.18,
+                shadowRadius: 8,
+                elevation: 8,
+                zIndex: 2,
+              }}>
+                <Ionicons name="arrow-forward" size={32} color="#fff" />
+              </Animated.View>
+              <Text style={{
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: 20,
+                marginLeft: 70,
+                letterSpacing: 0.5,
+                zIndex: 1,
+              }}>
+                Swipe to go online
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      )}
+      {/* SOS Button */}
+      <Animated.View style={{
+        position: 'absolute',
+        top: height * 0.65,
+        right: 24,
+        zIndex: 1000,
+        shadowColor: '#FF3B30',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        elevation: 12,
+      }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#FF3B30',
+            borderRadius: 32,
+            width: 64,
+            height: 64,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: '#FF3B30',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            elevation: 12,
+          }}
+          onPress={() => setSOSVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>SOS</Text>
+        </TouchableOpacity>
+      </Animated.View>
       {/* SOS Modal */}
       <SOSModal visible={isSOSVisible} onClose={() => setSOSVisible(false)} />
       {/* Ride Request Modal */}
@@ -334,11 +1102,12 @@ export default function HomeScreen() {
           ride={navigationRide}
           onNavigate={handleNavigate}
           onArrived={handleArrived}
+          onClose={() => setNavigationRide(null)}
         />
       )}
       {/* OTP Screen */}
       {navigationRide && showOtp && (
-        <OtpScreen onSubmit={handleOtpSubmit} />
+        <OtpScreen onSubmit={handleOtpSubmit} onClose={() => setShowOtp(false)} />
       )}
       {/* Ride In Progress Screen */}
       {rideInProgress && (
@@ -346,9 +1115,105 @@ export default function HomeScreen() {
           ride={rideInProgress}
           onNavigate={handleNavigateToDropoff}
           onEnd={handleEndRide}
+          onClose={() => setRideInProgress(null)}
         />
       )}
-    </View>
+      <MenuModal
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        onNavigate={(screen) => {
+          try {
+            navigation.navigate(screen as never);
+          } catch (error) {
+            console.log(`Navigation error to ${screen}:`, error);
+            // Fallback navigation or show error message
+          }
+        }}
+        halfScreen
+      />
+      {/* Safety Toolkit Modal */}
+      <Modal
+        visible={safetyModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSafetyModalVisible(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.25)' }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingTop: 16,
+            paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
+            paddingHorizontal: 0,
+            minHeight: 420,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 12,
+            elevation: 20,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, marginBottom: 8 }}>
+              <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Safety Toolkit</Text>
+              <TouchableOpacity onPress={() => setSafetyModalVisible(false)}>
+                <Ionicons name="close" size={28} color="#222" />
+              </TouchableOpacity>
+            </View>
+            {/* List */}
+            <ScrollView style={{ paddingHorizontal: 8 }} showsVerticalScrollIndicator={false}>
+              {/* Emergency Contacts */}
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Ionicons name="alert-circle" size={28} color="#FF3B30" style={{ marginRight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>Emergency Contacts</Text>
+                  <Text style={{ color: '#666', fontSize: 14 }}>Contact emergency services.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="#bbb" />
+              </TouchableOpacity>
+              {/* Record Audio */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Ionicons name="mic" size={26} color="#222" style={{ marginRight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>Record audio</Text>
+                  <Text style={{ color: '#666', fontSize: 14 }}>Record audio during your trips.</Text>
+                </View>
+                <TouchableOpacity style={{ backgroundColor: '#eee', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 6 }}>
+                  <Text style={{ color: '#222', fontWeight: 'bold', fontSize: 14 }}>Set up</Text>
+                </TouchableOpacity>
+              </View>
+              {/* Follow my ride */}
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Ionicons name="radio-outline" size={26} color="#222" style={{ marginRight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>Follow my ride</Text>
+                  <Text style={{ color: '#666', fontSize: 14 }}>Share your location and trip status.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="#bbb" />
+              </TouchableOpacity>
+              {/* Proof of trip status */}
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Ionicons name="image-outline" size={26} color="#222" style={{ marginRight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>Proof of trip status</Text>
+                  <Text style={{ color: '#666', fontSize: 14 }}>Show law enforcement your current status.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="#bbb" />
+              </TouchableOpacity>
+              {/* Safety Hub */}
+              <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                <Ionicons name="shield-outline" size={26} color="#222" style={{ marginRight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>Safety Hub</Text>
+                  <Text style={{ color: '#666', fontSize: 14 }}>View your safety settings and resources.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="#bbb" />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -420,112 +1285,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 2,
-  },
-  centerMarker: {
-    position: 'absolute',
-    top: height / 2 - 32,
-    left: width / 2 - 16,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 4,
-    elevation: 4,
-    zIndex: -1,
-  },
-  swipeBarContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 90,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  swipeBarBg: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 90,
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    elevation: 10,
-  },
-  swipeBarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: width - 48,
-    height: 56,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 28,
-    marginHorizontal: 24,
-    marginBottom: 18,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  swipeBarText: {
-    flex: 1,
-    textAlign: 'center',
-    color: '#00C853',
-    fontWeight: 'bold',
-    fontSize: 20,
-    zIndex: 1,
-  },
-  swipeCircle: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    zIndex: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  onlineBarContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: width - 48,
-    height: 56,
-    backgroundColor: '#00C853',
-    borderRadius: 28,
-    marginHorizontal: 24,
-    marginBottom: 18,
-  },
-  onlineBarText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 20,
-  },
-  sosButton: {
-    position: 'absolute',
-    bottom: '40%',
-    right: 20,
-    backgroundColor: '#FF3B30',
-    borderRadius: 32,
-    width: 64,
-    height: 64,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 10,
-    zIndex: 99999,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  sosText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 22,
-    letterSpacing: 1,
   },
 });

@@ -1,5 +1,4 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +7,7 @@ import {
   Dimensions,
   Image,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,11 +16,37 @@ import { Layout } from '../../constants/Layout';
 import { onboardingData } from '../../data/mockData';
 import Button from '../../components/common/Button';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function OnboardingScreen({ navigation }: any) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleNext = () => {
     if (currentIndex < onboardingData.length - 1) {
@@ -38,18 +64,19 @@ export default function OnboardingScreen({ navigation }: any) {
 
   const renderOnboardingItem = ({ item }: any) => (
     <View style={styles.slide}>
-      <View style={styles.imageContainer}>
+      <Animated.View style={[styles.imageContainer, { transform: [{ scale: scaleAnim }] }]}>
         <Image source={{ uri: item.image }} style={styles.image} />
-      </View>
-      <View style={styles.content}>
+        <View style={styles.imageOverlay} />
+      </Animated.View>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.description}>{item.description}</Text>
-      </View>
+      </Animated.View>
     </View>
   );
 
   const renderPagination = () => (
-    <View style={styles.pagination}>
+    <Animated.View style={[styles.pagination, { opacity: fadeAnim }]}>
       {onboardingData.map((_, index) => (
         <View
           key={index}
@@ -59,16 +86,17 @@ export default function OnboardingScreen({ navigation }: any) {
           ]}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+          <Ionicons name="close" size={20} color="#666" style={{ marginRight: 8 }} />
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       <FlatList
         ref={flatListRef}
@@ -86,13 +114,13 @@ export default function OnboardingScreen({ navigation }: any) {
 
       {renderPagination()}
 
-      <View style={styles.footer}>
+      <Animated.View style={[styles.footer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <Button
           title={currentIndex === onboardingData.length - 1 ? 'Get Started' : 'Next'}
           onPress={handleNext}
           fullWidth
         />
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -100,20 +128,26 @@ export default function OnboardingScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: Layout.spacing.lg,
-    paddingTop: Layout.spacing.md,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   skipButton: {
-    padding: Layout.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 20,
   },
   skipText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 16,
+    color: '#666',
     fontWeight: '600',
   },
   slide: {
@@ -121,57 +155,77 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Layout.spacing.lg,
+    paddingHorizontal: 24,
   },
   imageContainer: {
-    width: 280,
-    height: 280,
-    borderRadius: Layout.borderRadius.xl,
+    width: 300,
+    height: 300,
+    borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: Layout.spacing.xl,
-    backgroundColor: Colors.gray100,
+    marginBottom: 40,
+    backgroundColor: '#f8f9fa',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
   },
   image: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(24, 119, 242, 0.1)',
+  },
   content: {
     alignItems: 'center',
-    paddingHorizontal: Layout.spacing.lg,
+    paddingHorizontal: 24,
   },
   title: {
-    fontSize: Layout.fontSize.xxl,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#222',
     textAlign: 'center',
-    marginBottom: Layout.spacing.md,
+    marginBottom: 16,
+    lineHeight: 40,
   },
   description: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.textSecondary,
+    fontSize: 18,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 28,
+    paddingHorizontal: 20,
   },
   pagination: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Layout.spacing.lg,
+    paddingVertical: 24,
   },
   paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.gray300,
-    marginHorizontal: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 6,
   },
   paginationDotActive: {
-    backgroundColor: Colors.primary,
-    width: 24,
+    backgroundColor: '#1877f2',
+    width: 30,
+    shadowColor: '#1877f2',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   footer: {
-    paddingHorizontal: Layout.spacing.lg,
-    paddingBottom: Layout.spacing.lg,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
   },
 });
