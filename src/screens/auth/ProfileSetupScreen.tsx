@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     paddingBottom: Layout.spacing.lg,
   },
   title: {
-    fontSize: Layout.fontSize.xxl,
+    fontSize: Layout.fontSize.xl,
     fontWeight: 'bold',
     color: Colors.text,
     marginBottom: Layout.spacing.sm,

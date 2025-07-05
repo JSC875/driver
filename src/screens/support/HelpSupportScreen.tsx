@@ -85,7 +85,7 @@ export default function HelpSupportScreen({ navigation }: any) {
                 <View style={styles.menuIcon}>
                   <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
                 </View>
-                <Text style={styles.menuText}>{item.label}</Text>
+              <Text style={styles.menuText}>{item.label}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
             </TouchableOpacity>
@@ -105,7 +105,7 @@ export default function HelpSupportScreen({ navigation }: any) {
                 <View style={styles.menuIcon}>
                   <Ionicons name={item.icon as any} size={20} color={Colors.primary} />
                 </View>
-                <Text style={styles.menuText}>{item.label}</Text>
+              <Text style={styles.menuText}>{item.label}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
             </TouchableOpacity>

@@ -70,65 +70,65 @@ export default function WalletScreen({ navigation }: any) {
   const renderPaymentMethod = ({ item }: any) => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <TouchableOpacity style={styles.paymentMethodCard} activeOpacity={0.7}>
-        <View style={styles.paymentMethodLeft}>
-          <View style={styles.paymentMethodIcon}>
-            <Ionicons
-              name={item.type === 'upi' ? 'card' : item.type === 'card' ? 'card' : 'cash'}
-              size={24}
-              color={Colors.primary}
-            />
-          </View>
-          <View style={styles.paymentMethodInfo}>
-            <Text style={styles.paymentMethodName}>{item.name}</Text>
-            <Text style={styles.paymentMethodIdentifier}>{item.identifier}</Text>
-          </View>
+      <View style={styles.paymentMethodLeft}>
+        <View style={styles.paymentMethodIcon}>
+          <Ionicons
+            name={item.type === 'upi' ? 'card' : item.type === 'card' ? 'card' : 'cash'}
+            size={24}
+            color={Colors.primary}
+          />
         </View>
-        <View style={styles.paymentMethodActions}>
-          {item.isDefault && (
-            <View style={styles.defaultBadge}>
-              <Text style={styles.defaultText}>Default</Text>
-            </View>
-          )}
+        <View style={styles.paymentMethodInfo}>
+          <Text style={styles.paymentMethodName}>{item.name}</Text>
+          <Text style={styles.paymentMethodIdentifier}>{item.identifier}</Text>
+        </View>
+      </View>
+      <View style={styles.paymentMethodActions}>
+        {item.isDefault && (
+          <View style={styles.defaultBadge}>
+            <Text style={styles.defaultText}>Default</Text>
+          </View>
+        )}
           <TouchableOpacity style={styles.moreButton} activeOpacity={0.7}>
-            <Ionicons name="ellipsis-vertical" size={20} color={Colors.gray400} />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+          <Ionicons name="ellipsis-vertical" size={20} color={Colors.gray400} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
     </Animated.View>
   );
 
   const renderTransaction = ({ item }: any) => (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <View style={styles.transactionItem}>
-        <View style={styles.transactionLeft}>
-          <View
-            style={[
-              styles.transactionIcon,
-              item.type === 'credit' ? styles.creditIcon : styles.debitIcon,
-            ]}
-          >
-            <Ionicons
-              name={item.type === 'credit' ? 'add' : 'remove'}
-              size={20}
-              color={Colors.white}
-            />
-          </View>
-          <View style={styles.transactionInfo}>
-            <Text style={styles.transactionDescription}>{item.description}</Text>
-            <Text style={styles.transactionDate}>
-              {item.date} • {item.time}
-            </Text>
-          </View>
-        </View>
-        <Text
+    <View style={styles.transactionItem}>
+      <View style={styles.transactionLeft}>
+        <View
           style={[
-            styles.transactionAmount,
-            item.type === 'credit' ? styles.creditAmount : styles.debitAmount,
+            styles.transactionIcon,
+            item.type === 'credit' ? styles.creditIcon : styles.debitIcon,
           ]}
         >
-          {item.type === 'credit' ? '+' : '-'}₹{item.amount}
-        </Text>
+          <Ionicons
+            name={item.type === 'credit' ? 'add' : 'remove'}
+            size={20}
+            color={Colors.white}
+          />
+        </View>
+        <View style={styles.transactionInfo}>
+          <Text style={styles.transactionDescription}>{item.description}</Text>
+          <Text style={styles.transactionDate}>
+            {item.date} • {item.time}
+          </Text>
+        </View>
       </View>
+      <Text
+        style={[
+          styles.transactionAmount,
+          item.type === 'credit' ? styles.creditAmount : styles.debitAmount,
+        ]}
+      >
+        {item.type === 'credit' ? '+' : '-'}₹{item.amount}
+      </Text>
+    </View>
     </Animated.View>
   );
 

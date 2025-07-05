@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gray50,
     paddingHorizontal: Layout.spacing.md,
     paddingVertical: Layout.spacing.sm,
-    borderRadius: Layout.borderRadius.full,
+    borderRadius: 50,
     marginRight: Layout.spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,

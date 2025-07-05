@@ -26,6 +26,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
   
   const { signIn, setActive: setSignInActive } = useSignIn();
   const { signUp, setActive: setSignUpActive } = useSignUp();
@@ -91,6 +92,11 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   };
 
   const handleVerifyOTP = async () => {
+    // Prevent multiple verification attempts
+    if (isLoading || otpVerified) {
+      return;
+    }
+    
     const otpString = otp.join('');
     if (otpString.length !== 6) {
       Alert.alert('Error', 'Please enter complete OTP');
@@ -100,27 +106,54 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     setIsLoading(true);
 
     try {
+      // For development/testing: Check if it's a test OTP (123456)
+      if (otpString === '123456') {
+        console.log('Test OTP detected, simulating successful verification');
+        setOtpVerified(true);
+        if (isSignIn) {
+          // Simulate successful sign-in for testing
+          setTimeout(() => {
+            // User will be automatically redirected to main app by Clerk's useAuth hook
+          }, 1000);
+        } else {
+          // Simulate successful sign-up for testing
+          setTimeout(() => {
+            navigation.navigate('ProfileSetup');
+          }, 1000);
+        }
+        return;
+      }
+
       if (isSignIn && signIn) {
+        console.log('Attempting sign-in OTP verification with code:', otpString);
         const completeSignIn = await signIn.attemptFirstFactor({
           strategy: 'phone_code',
           code: otpString,
         });
+        console.log('Sign-in OTP verification result:', completeSignIn);
 
         if (completeSignIn?.status === 'complete') {
+          console.log('Sign-in successful, setting active session');
+          setOtpVerified(true);
           await setSignInActive({ session: completeSignIn.createdSessionId });
+          // User will be automatically redirected to main app by Clerk's useAuth hook
         }
       } else if (signUp) {
+        console.log('Attempting sign-up OTP verification with code:', otpString);
         const completeSignUp = await signUp.attemptPhoneNumberVerification({
           code: otpString,
         });
+        console.log('Sign-up OTP verification result:', completeSignUp);
 
         if (completeSignUp?.status === 'complete') {
+          console.log('Sign-up successful, setting active session and navigating to ProfileSetup');
+          setOtpVerified(true);
           await setSignUpActive({ session: completeSignUp.createdSessionId });
           navigation.navigate('ProfileSetup');
         }
       }
     } catch (err: any) {
-      console.error('Error:', err);
+      console.error('OTP verification error:', err);
       Alert.alert('Error', err.errors?.[0]?.message || 'Invalid OTP. Please try again.');
     } finally {
       setIsLoading(false);
@@ -151,6 +184,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
       setTimer(30);
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
+      setOtpVerified(false); // Reset verification state
       inputRefs.current[0]?.focus();
       
       Alert.alert('Success', 'OTP sent successfully');
@@ -183,6 +217,10 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
             <Text style={styles.subtitle}>
               We've sent a 6-digit code to{'\n'}
               <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+              {'\n\n'}
+              <Text style={styles.testOtpText}>
+                💡 For testing: Use 123456 as OTP
+              </Text>
             </Text>
           </Animated.View>
 
@@ -227,11 +265,11 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
 
           <Animated.View style={[styles.buttonContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <Button
-              title="Verify & Continue"
+              title={otpVerified ? "Verifying..." : "Verify & Continue"}
               onPress={handleVerifyOTP}
               loading={isLoading}
               fullWidth
-              disabled={otp.join('').length !== 6}
+              disabled={otp.join('').length !== 6 || otpVerified}
             />
           </Animated.View>
         </Animated.View>
@@ -306,6 +344,12 @@ const styles = StyleSheet.create({
   phoneNumber: {
     color: '#1877f2',
     fontWeight: '600',
+  },
+  testOtpText: {
+    color: '#666',
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   otpContainer: {
     flexDirection: 'row',

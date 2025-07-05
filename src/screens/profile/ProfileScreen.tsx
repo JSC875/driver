@@ -163,10 +163,10 @@ export default function ProfileScreen({ navigation, route }: any) {
         <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.profileInfo}>
             <View style={styles.profilePhotoContainer}>
-              <Image
-                source={{ uri: profilePhoto }}
-                style={styles.profilePhoto}
-              />
+            <Image
+              source={{ uri: profilePhoto }}
+              style={styles.profilePhoto}
+            />
               <View style={styles.onlineIndicator} />
             </View>
             <View style={styles.profileDetails}>
@@ -251,11 +251,11 @@ export default function ProfileScreen({ navigation, route }: any) {
             >
               <View style={styles.menuItemLeft}>
                 <View style={styles.menuIconContainer}>
-                  <Ionicons
-                    name={option.icon as any}
-                    size={24}
+                <Ionicons
+                  name={option.icon as any}
+                  size={24}
                     color={Colors.primary}
-                  />
+                />
                 </View>
                 <Text style={styles.menuItemText}>{option.title}</Text>
               </View>
@@ -267,9 +267,9 @@ export default function ProfileScreen({ navigation, route }: any) {
         {/* Logout */}
         <Animated.View style={[styles.logoutContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={24} color={Colors.error} />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </TouchableOpacity>
+          <Ionicons name="log-out-outline" size={24} color={Colors.error} />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
