@@ -604,7 +604,9 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: bool
 export default function HomeScreen() {
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
+  const [showOfflineScreen, setShowOfflineScreen] = useState(false);
   const swipeX = useRef(new Animated.Value(0)).current;
+  const offlineSwipeX = useRef(new Animated.Value(0)).current;
   const SWIPE_WIDTH = width - 48;
   const SWIPE_THRESHOLD = SWIPE_WIDTH * 0.6;
   const lastHaptic = useRef(Date.now());
@@ -618,7 +620,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [safetyModalVisible, setSafetyModalVisible] = useState(false);
 
-  // PanResponder for swipe gesture
+  // PanResponder for swipe to go online gesture
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isOnline,
@@ -657,9 +659,65 @@ export default function HomeScreen() {
     })
   ).current;
 
+  // PanResponder for swipe to go offline gesture
+  const offlinePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => isOnline && showOfflineScreen,
+      onMoveShouldSetPanResponder: () => isOnline && showOfflineScreen,
+      onPanResponderMove: (e, gestureState) => {
+        if (!isOnline || !showOfflineScreen) return;
+        let newX = gestureState.dx;
+        if (newX < 0) newX = 0;
+        if (newX > SWIPE_WIDTH - 56) newX = SWIPE_WIDTH - 56;
+        offlineSwipeX.setValue(newX);
+        // Throttle haptic feedback
+        const now = Date.now();
+        if (now - lastHaptic.current > 60) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          lastHaptic.current = now;
+        }
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        if (!isOnline || !showOfflineScreen) return;
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          Animated.timing(offlineSwipeX, {
+            toValue: SWIPE_WIDTH - 56,
+            duration: 120,
+            useNativeDriver: false,
+          }).start(() => {
+            setIsOnline(false);
+            setShowOfflineScreen(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          });
+        } else {
+          Animated.spring(offlineSwipeX, {
+            toValue: 0,
+            useNativeDriver: false,
+          }).start();
+    }
+      },
+    })
+  ).current;
+
   const resetOnline = () => {
     setIsOnline(false);
     Animated.spring(swipeX, {
+      toValue: 0,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const goOffline = () => {
+    setShowOfflineScreen(true);
+    Animated.spring(offlineSwipeX, {
+      toValue: 0,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const cancelOffline = () => {
+    setShowOfflineScreen(false);
+    Animated.spring(offlineSwipeX, {
       toValue: 0,
       useNativeDriver: false,
     }).start();
@@ -783,7 +841,7 @@ export default function HomeScreen() {
         pitchEnabled={isOnline}
       />
       {/* Overall Offline Overlay */}
-      {!isOnline && !isRideActive && (
+      {!isOnline && !isRideActive && !showOfflineScreen && (
         <View
           style={{
             position: 'absolute',
@@ -821,7 +879,7 @@ export default function HomeScreen() {
                 position: 'absolute',
                 width: 60,
                 height: 6,
-                backgroundColor: '#D32F2F', // red for visibility
+                backgroundColor: '#333333',
                 borderRadius: 3,
                 top: 37,
                 left: 10,
@@ -847,6 +905,168 @@ export default function HomeScreen() {
           >
             You're Offline
           </Text>
+        </View>
+      )}
+
+      {/* Go Offline Confirmation Screen */}
+      {showOfflineScreen && isOnline && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            zIndex: 2000,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {/* Offline Confirmation Card */}
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 24,
+              padding: 32,
+              margin: 24,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              elevation: 16,
+              maxWidth: 320,
+            }}
+          >
+            {/* Warning Icon */}
+            <View
+              style={{
+                backgroundColor: '#FF3B30',
+                borderRadius: 50,
+                width: 80,
+                height: 80,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 24,
+                shadowColor: '#FF3B30',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 8,
+              }}
+            >
+              <Ionicons name="power" size={40} color="#fff" />
+            </View>
+            
+            {/* Title */}
+            <Text
+              style={{
+                fontSize: 28,
+                fontWeight: 'bold',
+                color: '#222',
+                textAlign: 'center',
+                marginBottom: 12,
+              }}
+            >
+              Go Offline?
+            </Text>
+            
+            {/* Description */}
+            <Text
+              style={{
+                fontSize: 16,
+                color: '#666',
+                textAlign: 'center',
+                marginBottom: 32,
+                lineHeight: 22,
+              }}
+            >
+              You won't receive ride requests until you go back online
+            </Text>
+
+            {/* Swipe to Go Offline Bar */}
+            <View style={{
+              width: '100%',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 24,
+            }}>
+              {/* Cancel Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 24,
+                  width: 48,
+                  height: 48,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 8,
+                  elevation: 6,
+                  marginRight: 12,
+                  borderWidth: 2,
+                  borderColor: '#e0e0e0',
+                }}
+                onPress={cancelOffline}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              {/* Swipe Bar */}
+              <View style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#FF3B30',
+                borderRadius: 32,
+                paddingVertical: 16,
+                paddingHorizontal: 24,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.18,
+                shadowRadius: 12,
+                elevation: 10,
+              }}
+              {...offlinePanResponder.panHandlers}
+              >
+                <Animated.View style={{
+                  position: 'absolute',
+                  left: offlineSwipeX,
+                  top: 0,
+                  bottom: 0,
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: '#fff',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 8,
+                  elevation: 8,
+                  zIndex: 2,
+                }}>
+                  <Ionicons name="arrow-forward" size={32} color="#FF3B30" />
+                </Animated.View>
+                <Text style={{
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: 18,
+                  marginLeft: 70,
+                  letterSpacing: 0.5,
+                  zIndex: 1,
+                }}>
+                  Swipe to go offline
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
       )}
       {/* Test Ride Request Button (show only when online and no ride in progress) */}
@@ -945,28 +1165,65 @@ export default function HomeScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#00C853',
-              borderRadius: 32,
-              paddingVertical: 16,
               paddingHorizontal: 24,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.18,
-              shadowRadius: 12,
-              elevation: 10,
+              gap: 12,
             }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Online Status Button */}
+              <TouchableOpacity 
+                style={{
+                  flex: 1,
+                  backgroundColor: '#00C853',
+                  borderRadius: 32,
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 12,
+                  elevation: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => {}} // No action needed for status display
+                activeOpacity={0.9}
+              >
                 <Text style={{
                   color: '#fff',
                   fontWeight: 'bold',
-                  fontSize: 22,
+                  fontSize: 20,
                   letterSpacing: 0.5,
                 }}>
                   You're ONLINE
                 </Text>
-              </View>
-              <TouchableOpacity onPress={resetOnline} style={{ marginLeft: 12 }}>
-                <Ionicons name="power" size={28} color="#FF3B30" />
+              </TouchableOpacity>
+              
+              {/* Go Offline Button */}
+              <TouchableOpacity 
+                style={{
+                  backgroundColor: '#FF3B30',
+                  borderRadius: 32,
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 12,
+                  elevation: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minWidth: 120,
+                }}
+                onPress={goOffline}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: 18,
+                  letterSpacing: 0.5,
+                }}>
+                  Go Offline
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1053,38 +1310,40 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
       )}
-      {/* SOS Button */}
-      <Animated.View style={{
-        position: 'absolute',
-        top: height * 0.65,
-        right: 24,
-        zIndex: 1000,
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 12,
-      }}>
-        <TouchableOpacity
-          style={{
-            backgroundColor: '#FF3B30',
-            borderRadius: 32,
-            width: 64,
-            height: 64,
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#FF3B30',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.25,
-            shadowRadius: 16,
-            elevation: 12,
-          }}
-          onPress={() => setSOSVisible(true)}
-          activeOpacity={0.85}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>SOS</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      {/* SOS Button (show only when online) */}
+      {isOnline && (
+        <Animated.View style={{
+          position: 'absolute',
+          top: height * 0.65,
+          right: 24,
+          zIndex: 1000,
+          shadowColor: '#FF3B30',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.25,
+          shadowRadius: 16,
+          elevation: 12,
+        }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#FF3B30',
+              borderRadius: 32,
+              width: 64,
+              height: 64,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#FF3B30',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              elevation: 12,
+            }}
+            onPress={() => setSOSVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>SOS</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
       {/* SOS Modal */}
       <SOSModal visible={isSOSVisible} onClose={() => setSOSVisible(false)} />
       {/* Ride Request Modal */}
