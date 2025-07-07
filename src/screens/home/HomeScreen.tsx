@@ -951,34 +951,45 @@ export default function HomeScreen() {
           style={{
             flex: 1,
             backgroundColor: '#fff',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
+            paddingTop: insets.top + 24,
+            paddingHorizontal: 0,
           }}
         >
-          {/* Swipe to Go Offline Bar - Full Width at Bottom */}
+          <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 24, marginBottom: 16 }}>
+            <Ionicons name="compass-outline" size={22} color="#111" style={{ marginRight: 8 }} />
+            <TouchableOpacity onPress={() => Alert.alert('Driving Time', 'Driving time feature coming soon!')}>
+              <Text style={{ fontSize: 16, color: '#111' }}>See driving time</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={{ marginLeft: 24, marginBottom: 32 }} onPress={() => Alert.alert('Waybill', 'Waybill feature coming soon!')}>
+            <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '500' }}>Waybill</Text>
+          </TouchableOpacity>
+          {/* Swipe to Go Offline Bar (modal, 80% width, bottom, working like online swipe) */}
           <View
             style={{
-              width: '100%',
+              position: 'absolute',
+              left: '10%',
+              right: '10%',
+              bottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
+              width: '80%',
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              paddingHorizontal: 16,
-              paddingBottom: 32 + insets.bottom, // Safe area
-              paddingTop: 16,
-              backgroundColor: 'transparent',
+              zIndex: 10000,
             }}
           >
-            {/* Swipe Bar */}
             <View
               style={{
                 flex: 1,
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: '#111',
+                backgroundColor: '#1A2233',
                 borderRadius: 32,
-                paddingVertical: 12,
-                paddingHorizontal: 8,
-                marginRight: 12,
+                paddingVertical: 16,
+                paddingHorizontal: 24,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.18,
@@ -987,59 +998,41 @@ export default function HomeScreen() {
               }}
               {...offlinePanResponder.panHandlers}
             >
-              <Animated.View style={{
-                position: 'absolute',
-                left: offlineSwipeX,
-                top: 0,
-                bottom: 0,
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: '#fff',
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.18,
-                shadowRadius: 8,
-                elevation: 8,
-                zIndex: 2,
-              }}>
-                <Ionicons name="arrow-forward" size={28} color="#111" />
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  left: offlineSwipeX,
+                  top: 0,
+                  bottom: 0,
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: '#26304A',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#26304A',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.18,
+                  shadowRadius: 8,
+                  elevation: 8,
+                  zIndex: 2,
+                }}
+              >
+                <Ionicons name="arrow-forward" size={32} color="#fff" />
               </Animated.View>
-              <Text style={{
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: 18,
-                marginLeft: 56,
-                letterSpacing: 0.5,
-                zIndex: 1,
-              }}>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: 20,
+                  marginLeft: 70,
+                  letterSpacing: 0.5,
+                  zIndex: 1,
+                }}
+              >
                 Swipe to go offline
               </Text>
             </View>
-            {/* Close Button */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#fff',
-                borderRadius: 24,
-                width: 48,
-                height: 48,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 6,
-                borderWidth: 2,
-                borderColor: '#e0e0e0',
-              }}
-              onPress={cancelOffline}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close" size={24} color="#111" />
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
