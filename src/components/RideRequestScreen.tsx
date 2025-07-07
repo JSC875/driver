@@ -20,6 +20,13 @@ export type RideRequest = {
 };
 
 const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void }) => {
+  const stopAudio = async () => {
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+  };
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(100)).current;
   const acceptAnim = useRef(new Animated.Value(1)).current;
@@ -59,7 +66,16 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
     (async () => {
       try {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (e) {}
+        
+        // Load and play audio in loop
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../assets/sounds/Ubersound.mp3'),
+          { shouldPlay: true, isLooping: true }
+        );
+        soundRef.current = sound;
+      } catch (e) {
+        console.log('Error playing audio:', e);
+      }
     })();
     return () => {
       acceptAnim.stopAnimation();
@@ -74,7 +90,10 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
     <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}> 
       <Animated.View style={[styles.cardContainer, { transform: [{ translateY: cardAnim.interpolate({ inputRange: [0, 100], outputRange: [0, 500] }) }] }]}> 
         {/* Close Button */}
-        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
+        <TouchableOpacity onPress={async () => {
+          await stopAudio();
+          onClose();
+        }} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
         </TouchableOpacity>
         {/* Top Pills */}
@@ -110,12 +129,18 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
         </View>
         <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
           {onReject && (
-            <TouchableOpacity style={styles.rejectButton} onPress={onReject} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.rejectButton} onPress={async () => {
+              await stopAudio();
+              onReject();
+            }} activeOpacity={0.8}>
               <Text style={styles.rejectButtonText}>Reject</Text>
             </TouchableOpacity>
           )}
           <Animated.View style={{ flex: 1, alignItems: 'center', transform: [{ scale: acceptAnim }] }}>
-            <TouchableOpacity style={styles.acceptButton} onPress={onAccept} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.acceptButton} onPress={async () => {
+              await stopAudio();
+              onAccept();
+            }} activeOpacity={0.8}>
               <Text style={styles.acceptButtonText}>Accept</Text>
             </TouchableOpacity>
           </Animated.View>

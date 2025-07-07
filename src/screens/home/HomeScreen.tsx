@@ -6,7 +6,7 @@ import * as Haptics from 'expo-haptics';
 import RideRequestScreen, { RideRequest } from '../../components/RideRequestScreen';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import Polyline from '@mapbox/polyline';
@@ -844,41 +844,11 @@ export default function HomeScreen() {
 
   const isRideActive = !!(rideRequest || navigationRide || showOtp || rideInProgress);
 
-  // Play notification sound on ride request
+  // Play haptic feedback on ride request
   useEffect(() => {
     if (rideRequest) {
       // Play haptic feedback immediately
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      // Try to play sound with better error handling
-      (async () => {
-        try {
-          // Use a simple beep sound that's more reliable
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' },
-            { 
-              shouldPlay: true, 
-              volume: 1.0,
-              isLooping: false 
-            }
-          );
-          
-          // Play the sound
-          await sound.playAsync();
-          
-          // Clean up sound after playing
-          setTimeout(async () => {
-            try {
-              await sound.unloadAsync();
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-          }, 1500);
-        } catch (e) {
-          console.log('Sound not available, using haptic only');
-          // Fallback to just haptic feedback - this is already working
-        }
-      })();
     }
   }, [rideRequest]);
 
