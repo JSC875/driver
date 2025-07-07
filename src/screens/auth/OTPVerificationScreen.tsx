@@ -17,6 +17,7 @@ import { useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   
   const { signIn, setActive: setSignInActive } = useSignIn();
   const { signUp, setActive: setSignUpActive } = useSignUp();
+  const { setTestAuthenticated } = useAuthStore();
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -98,6 +100,11 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     }
     
     const otpString = otp.join('');
+    console.log('OTP verification attempt with:', otpString);
+    console.log('isSignIn:', isSignIn);
+    console.log('signIn available:', !!signIn);
+    console.log('signUp available:', !!signUp);
+    
     if (otpString.length !== 6) {
       Alert.alert('Error', 'Please enter complete OTP');
       return;
@@ -110,13 +117,34 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
       if (otpString === '123456') {
         console.log('Test OTP detected, simulating successful verification');
         setOtpVerified(true);
+        
+        // For test OTP, we need to manually complete the sign-up process
         if (isSignIn) {
-          // Simulate successful sign-in for testing
+          // For sign-in test flow, we'll simulate the session
           setTimeout(() => {
-            // User will be automatically redirected to main app by Clerk's useAuth hook
+            console.log('Test sign-in completed, setting test authentication');
+            setTestAuthenticated(true);
           }, 1000);
         } else {
-          // Simulate successful sign-up for testing
+          // For sign-up test flow, navigate to profile setup
+          setTimeout(() => {
+            navigation.navigate('ProfileSetup');
+          }, 1000);
+        }
+        return;
+      }
+
+      // For development: Also accept any 6-digit code starting with '1' as valid
+      if (otpString.length === 6 && otpString.startsWith('1')) {
+        console.log('Development OTP detected, simulating successful verification');
+        setOtpVerified(true);
+        
+        if (isSignIn) {
+          setTimeout(() => {
+            console.log('Development sign-in completed, setting test authentication');
+            setTestAuthenticated(true);
+          }, 1000);
+        } else {
           setTimeout(() => {
             navigation.navigate('ProfileSetup');
           }, 1000);
@@ -137,6 +165,9 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
           setOtpVerified(true);
           await setSignInActive({ session: completeSignIn.createdSessionId });
           // User will be automatically redirected to main app by Clerk's useAuth hook
+        } else {
+          console.log('Sign-in verification failed with status:', completeSignIn?.status);
+          throw new Error('OTP verification failed');
         }
       } else if (signUp) {
         console.log('Attempting sign-up OTP verification with code:', otpString);
@@ -150,11 +181,19 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
           setOtpVerified(true);
           await setSignUpActive({ session: completeSignUp.createdSessionId });
           navigation.navigate('ProfileSetup');
+        } else if (completeSignUp?.status === 'missing_requirements') {
+          console.log('OTP verified but missing requirements, this should be handled in SignUpScreen');
+          // This case should be handled in the SignUpScreen where we have access to firstName/lastName
+          throw new Error('Please complete the signup process in the previous screen');
+        } else {
+          console.log('Sign-up verification failed with status:', completeSignUp?.status);
+          throw new Error('OTP verification failed');
         }
       }
     } catch (err: any) {
       console.error('OTP verification error:', err);
-      Alert.alert('Error', err.errors?.[0]?.message || 'Invalid OTP. Please try again.');
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Invalid OTP. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -219,7 +258,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
               <Text style={styles.phoneNumber}>{phoneNumber}</Text>
               {'\n\n'}
               <Text style={styles.testOtpText}>
-                💡 For testing: Use 123456 as OTP
+                💡 For testing: Use 123456 or any 6-digit code starting with '1'
               </Text>
             </Text>
           </Animated.View>

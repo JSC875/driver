@@ -18,6 +18,7 @@ import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { useAssignUserType } from '../../utils/helpers';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export default function ProfileSetupScreen({ navigation }: any) {
   const [firstName, setFirstName] = useState('');
@@ -26,6 +27,7 @@ export default function ProfileSetupScreen({ navigation }: any) {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useUser();
+  const { setTestAuthenticated } = useAuthStore();
 
   useAssignUserType('user');
 
@@ -50,19 +52,27 @@ export default function ProfileSetupScreen({ navigation }: any) {
     setIsLoading(true);
     
     try {
-      // Update user profile with Clerk
-      await user?.update({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-      });
+      // Check if user exists (for test OTP flow, user might not be properly signed in)
+      if (user) {
+        // Update user profile with Clerk
+        await user.update({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        });
 
-      // Add email if provided
-      if (email.trim()) {
-        await user?.createEmailAddress({ email: email.trim() });
+        // Add email if provided
+        if (email.trim()) {
+          await user.createEmailAddress({ email: email.trim() });
+        }
       }
 
-      // Don't navigate manually - the auth state will handle the transition
-      Alert.alert('Success', 'Profile updated successfully!');
+      // Navigate to home screen
+      Alert.alert('Success', 'Profile updated successfully!', [
+        { text: 'OK', onPress: () => {
+          console.log('Profile setup completed, setting test authentication');
+          setTestAuthenticated(true);
+        }}
+      ]);
     } catch (err: any) {
       console.error('Error updating profile:', err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
@@ -72,8 +82,12 @@ export default function ProfileSetupScreen({ navigation }: any) {
   };
 
   const handleSkip = () => {
-    // Don't navigate manually - the auth state will handle the transition
-    Alert.alert('Profile Setup', 'You can complete your profile later from the settings.');
+    Alert.alert('Profile Setup', 'You can complete your profile later from the settings.', [
+      { text: 'OK', onPress: () => {
+        console.log('Profile setup skipped, setting test authentication');
+        setTestAuthenticated(true);
+      }}
+    ]);
   };
 
   return (

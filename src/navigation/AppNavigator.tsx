@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
+import { useAuthStore } from '../store/useAuthStore';
 
 // Auth Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -125,15 +126,19 @@ function MainNavigator() {
 
 export default function AppNavigator() {
   const { isSignedIn, isLoaded } = useAuth();
+  const { isTestAuthenticated } = useAuthStore();
 
   // Show loading screen while checking auth state
   if (!isLoaded) {
     return null; // or a loading screen component
   }
 
+  // Use test authentication for development/testing
+  const shouldShowMainApp = isSignedIn || isTestAuthenticated;
+
   return (
     <NavigationContainer>
-      {isSignedIn ? <MainNavigator /> : <AuthNavigator />}
+      {shouldShowMainApp ? <MainNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }
