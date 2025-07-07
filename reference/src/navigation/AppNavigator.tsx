@@ -4,7 +4,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
-import { useAuthStore } from '../store/useAuthStore';
 
 // Auth Screens
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -13,7 +12,6 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import OTPVerificationScreen from '../screens/auth/OTPVerificationScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
-import DocumentUploadScreen from '../screens/auth/DocumentUploadScreen';
 
 // Home Screens
 import HomeScreen from '../screens/home/HomeScreen';
@@ -22,6 +20,9 @@ import RideEstimateScreen from '../screens/home/RideEstimateScreen';
 import ConfirmRideScreen from '../screens/home/ConfirmRideScreen';
 import ScheduleRideScreen from '../screens/home/ScheduleRideScreen';
 import OffersScreen from '../screens/home/OffersScreen';
+import DropLocationSelectorScreen from '../screens/home/DropLocationSelectorScreen';
+import DropPinLocationScreen from '../screens/home/DropPinLocationScreen';
+import RideOptionsScreen from '../screens/home/RideOptionsScreen';
 
 // Ride Screens
 import FindingDriverScreen from '../screens/ride/FindingDriverScreen';
@@ -32,11 +33,12 @@ import RideSummaryScreen from '../screens/ride/RideSummaryScreen';
 // Profile Screens
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import RideHistoryScreen from '../screens/profile/RideHistoryScreen';
-import WalletScreen from '../screens/profile/WalletScreen';
+
 import SettingsScreen from '../screens/profile/SettingsScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PersonalDetailsScreen from '../screens/profile/PersonalDetailsScreen';
 import AboutScreen from '../screens/profile/AboutScreen';
+import PaymentScreen from '../screens/profile/PaymentScreen';
 
 // Support Screens
 import HelpSupportScreen from '../screens/support/HelpSupportScreen';
@@ -59,6 +61,52 @@ import { Layout } from '../constants/Layout';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+function TabNavigator() {
+  return (
+    <Tab.Navigator
+      id={undefined}
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'History') {
+            iconName = focused ? 'time' : 'time-outline';
+          } else if (route.name === 'Wallet') {
+            iconName = focused ? 'wallet' : 'wallet-outline';
+          } else if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          } else {
+            iconName = 'home-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.gray400,
+        tabBarStyle: {
+          backgroundColor: Colors.white,
+          borderTopColor: Colors.border,
+          paddingBottom: Layout.spacing.sm,
+          paddingTop: Layout.spacing.sm,
+          height: 60,
+        },
+        tabBarLabelStyle: {
+          fontSize: Layout.fontSize.xs,
+          fontWeight: '600',
+        },
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="History" component={RideHistoryScreen} />
+      
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+
 function AuthNavigator() {
   return (
     <Stack.Navigator
@@ -75,7 +123,6 @@ function AuthNavigator() {
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-      <Stack.Screen name="DocumentUpload" component={DocumentUploadScreen} />
     </Stack.Navigator>
   );
 }
@@ -84,17 +131,25 @@ function MainNavigator() {
   return (
     <Stack.Navigator
       id={undefined}
-      initialRouteName="Home"
+      initialRouteName="TabNavigator"
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
       }}
     >
-      <Stack.Screen name="Home" component={HomeScreen} />
+      {/* Main App with Tabs */}
+      <Stack.Screen name="TabNavigator" component={TabNavigator} />
+      
+      {/* Home Flow */}
+      <Stack.Screen name="RideOptions" component={RideOptionsScreen} />
+      <Stack.Screen name="LocationSearch" component={LocationSearchScreen} />
       <Stack.Screen name="RideEstimate" component={RideEstimateScreen} />
       <Stack.Screen name="ConfirmRide" component={ConfirmRideScreen} />
       <Stack.Screen name="ScheduleRide" component={ScheduleRideScreen} />
       <Stack.Screen name="Offers" component={OffersScreen} />
+      <Stack.Screen name="DropLocationSelector" component={DropLocationSelectorScreen} />
+      <Stack.Screen name="DropPinLocation" component={DropPinLocationScreen} />
+      
       {/* Support Flow */}
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="RideIssues" component={RideIssuesScreen} />
@@ -109,38 +164,34 @@ function MainNavigator() {
       <Stack.Screen name="PaymentsIssues" component={PaymentsIssuesScreen} />
       <Stack.Screen name="OtherIssues" component={OtherIssuesScreen} />
       <Stack.Screen name="TermsCondition" component={TermsConditionScreen} />
+      
       {/* Ride Flow */}
       <Stack.Screen name="FindingDriver" component={FindingDriverScreen} />
       <Stack.Screen name="LiveTracking" component={LiveTrackingScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="RideSummary" component={RideSummaryScreen} />
+      
       {/* Profile Flow */}
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="RideHistory" component={RideHistoryScreen} />
-      <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="Payment" component={PaymentScreen} />
     </Stack.Navigator>
   );
 }
 
 export default function AppNavigator() {
   const { isSignedIn, isLoaded } = useAuth();
-  const { isTestAuthenticated } = useAuthStore();
 
   // Show loading screen while checking auth state
   if (!isLoaded) {
     return null; // or a loading screen component
   }
 
-  // Use test authentication for development/testing
-  const shouldShowMainApp = isSignedIn || isTestAuthenticated;
-
   return (
     <NavigationContainer>
-      {shouldShowMainApp ? <MainNavigator /> : <AuthNavigator />}
+      {isSignedIn ? <MainNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }

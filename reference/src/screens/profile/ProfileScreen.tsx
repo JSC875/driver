@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,6 @@ import {
   ScrollView,
   Image,
   Alert,
-  Animated,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,8 +14,6 @@ import { useAuth, useUser } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { useFocusEffect } from '@react-navigation/native';
-
-const { width } = Dimensions.get('window');
 
 const profileOptions = [
   {
@@ -30,7 +26,7 @@ const profileOptions = [
     id: '2',
     title: 'Wallet & Payments',
     icon: 'wallet-outline',
-    screen: 'Wallet',
+    screen: 'Payment',
   },
   {
     id: '3',
@@ -49,24 +45,6 @@ const profileOptions = [
 export default function ProfileScreen({ navigation, route }: any) {
   const { signOut } = useAuth();
   const { user } = useUser();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 8,
-      }),
-    ]).start();
-  }, []);
 
   const getUserPhoto = () => {
     return user?.imageUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
@@ -95,10 +73,10 @@ export default function ProfileScreen({ navigation, route }: any) {
       });
     } else if (screen === 'EditProfile') {
       navigation.navigate('EditProfile');
-    } else if (screen === 'RideHistory') {
-      navigation.navigate('RideHistory');
-    } else if (screen === 'Wallet') {
-      navigation.navigate('Wallet');
+    } else if (screen === 'History') {
+      navigation.navigate('History');
+    } else if (screen === 'Payment') {
+      navigation.navigate('Payment');
     } else if (screen === 'Settings') {
       navigation.navigate('Settings');
     } else if (screen === 'About') {
@@ -120,10 +98,6 @@ export default function ProfileScreen({ navigation, route }: any) {
           onPress: async () => {
             try {
               await signOut();
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'LoginScreen' }],
-              });
             } catch (error) {
               console.error('Error signing out:', error);
             }
@@ -155,24 +129,21 @@ export default function ProfileScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+      <View style={styles.header}>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.notificationButton}>
           <Ionicons name="notifications-outline" size={24} color={Colors.text} />
         </TouchableOpacity>
-      </Animated.View>
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Profile Info */}
-        <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.profileCard}>
           <View style={styles.profileInfo}>
-            <View style={styles.profilePhotoContainer}>
             <Image
               source={{ uri: profilePhoto }}
               style={styles.profilePhoto}
             />
-              <View style={styles.onlineIndicator} />
-            </View>
             <View style={styles.profileDetails}>
               <Text style={styles.profileName}>{getUserName()}</Text>
               {getUserEmail() && (
@@ -186,7 +157,7 @@ export default function ProfileScreen({ navigation, route }: any) {
               name: getUserName(),
               email: getUserEmail(),
               phone: getUserPhone(),
-            })} activeOpacity={0.7}>
+            })}>
               <Ionicons name="pencil" size={20} color={Colors.primary} />
             </TouchableOpacity>
           </View>
@@ -207,126 +178,73 @@ export default function ProfileScreen({ navigation, route }: any) {
               <Text style={styles.statLabel}>Total Spent</Text>
             </View>
           </View>
-        </Animated.View>
-
-        {user?.unsafeMetadata && (
-          <View style={{ backgroundColor: Colors.white, margin: Layout.spacing.lg, borderRadius: Layout.borderRadius.lg, padding: Layout.spacing.lg, marginTop: -8, marginBottom: Layout.spacing.lg }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 12 }}>Your Details & Documents</Text>
-            {user.unsafeMetadata.email && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>Email: {user.unsafeMetadata.email}</Text>
-            )}
-            {user.unsafeMetadata.dob && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>DOB: {new Date(user.unsafeMetadata.dob).toLocaleDateString()}</Text>
-            )}
-            {user.unsafeMetadata.gender && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>Gender: {user.unsafeMetadata.gender}</Text>
-            )}
-            {/* Document Images */}
-            {user.unsafeMetadata.bikeFrontPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Bike Front:</Text>
-                <Image source={{ uri: user.unsafeMetadata.bikeFrontPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.bikeBackPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Bike Back:</Text>
-                <Image source={{ uri: user.unsafeMetadata.bikeBackPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.licensePhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>License:</Text>
-                <Image source={{ uri: user.unsafeMetadata.licensePhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.rcPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>RC:</Text>
-                <Image source={{ uri: user.unsafeMetadata.rcPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.aadharPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Aadhar:</Text>
-                <Image source={{ uri: user.unsafeMetadata.aadharPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.panPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>PAN:</Text>
-                <Image source={{ uri: user.unsafeMetadata.panPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-          </View>
-        )}
+        </View>
 
         {/* Quick Actions */}
-        <Animated.View style={[styles.quickActions, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.quickActions}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionGrid}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('ScheduleRide')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="time" size={24} color={Colors.primary} />
-              </View>
-              <Text style={styles.actionText}>Schedule Ride</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('RideHistory')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.actionIcon}>
-                <Ionicons name="receipt" size={24} color={Colors.accent} />
-              </View>
-              <Text style={styles.actionText}>Ride History</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.getParent()?.navigate('Offers')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="gift" size={24} color={Colors.coral} />
-              </View>
-              <Text style={styles.actionText}>Offers</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('HelpSupport')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="help-circle" size={24} color={Colors.info} />
-              </View>
-              <Text style={styles.actionText}>Support</Text>
-            </TouchableOpacity>
+          <View style={styles.actionGridWrap}>
+            <View style={styles.actionGridRow}>
+              <TouchableOpacity style={styles.actionButtonGrid} onPress={() => navigation.navigate('ScheduleRide')}>
+                <View style={styles.actionIcon}>
+                  <Ionicons name="time" size={24} color={Colors.primary} />
+                </View>
+                <Text style={styles.actionText}>Schedule</Text>
+                <Text style={styles.actionText}>Ride</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonGrid} onPress={() => navigation.navigate('History')}>
+                <View style={styles.actionIcon}>
+                  <Ionicons name="receipt" size={24} color={Colors.accent} />
+                </View>
+                <Text style={styles.actionText}>Ride</Text>
+                <Text style={styles.actionText}>History</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.actionGridRow}>
+              <TouchableOpacity style={styles.actionButtonGrid} onPress={() => navigation.getParent()?.navigate('Offers')}>
+                <View style={styles.actionIcon}>
+                  <Ionicons name="gift" size={24} color={Colors.coral} />
+                </View>
+                <Text style={styles.actionText}>View</Text>
+                <Text style={styles.actionText}>Offers</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonGrid} onPress={() => navigation.navigate('HelpSupport')}>
+                <View style={styles.actionIcon}>
+                  <Ionicons name="help-circle" size={24} color={Colors.info} />
+                </View>
+                <Text style={styles.actionText}>Get</Text>
+                <Text style={styles.actionText}>Support</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Menu Options */}
-        <Animated.View style={[styles.menuContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          {profileOptions.map((option, index) => (
+        <View style={styles.menuContainer}>
+          {profileOptions.map((option) => (
             <TouchableOpacity
               key={option.id}
               style={styles.menuItem}
               onPress={() => handleOptionPress(option.screen)}
-              activeOpacity={0.7}
             >
               <View style={styles.menuItemLeft}>
-                <View style={styles.menuIconContainer}>
                 <Ionicons
                   name={option.icon as any}
                   size={24}
-                    color={Colors.primary}
+                  color={Colors.gray600}
                 />
-                </View>
                 <Text style={styles.menuItemText}>{option.title}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
             </TouchableOpacity>
           ))}
-        </Animated.View>
+        </View>
 
         {/* Logout */}
-        <Animated.View style={[styles.logoutContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={24} color={Colors.error} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
-        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -374,25 +292,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Layout.spacing.lg,
   },
-  profilePhotoContainer: {
-    position: 'relative',
-  },
   profilePhoto: {
     width: 80,
     height: 80,
     borderRadius: 40,
     marginRight: Layout.spacing.md,
-  },
-  onlineIndicator: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: Colors.white,
-    right: 0,
-    bottom: 0,
   },
   profileDetails: {
     flex: 1,
@@ -463,12 +367,18 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: Layout.spacing.md,
   },
-  actionGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  actionGridWrap: {
+    flexDirection: 'column',
   },
-  actionButton: {
+  actionGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  actionButtonGrid: {
+    flex: 1,
     alignItems: 'center',
+    marginHorizontal: 6,
   },
   actionIcon: {
     width: 48,
@@ -494,12 +404,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Layout.spacing.lg,
     paddingVertical: Layout.spacing.md,
     borderBottomWidth: 1,
@@ -508,45 +417,31 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Layout.spacing.md,
   },
   menuItemText: {
+    marginLeft: Layout.spacing.md,
     fontSize: Layout.fontSize.md,
     color: Colors.text,
-    fontWeight: '500',
-  },
-  logoutContainer: {
-    backgroundColor: Colors.white,
-    marginHorizontal: Layout.spacing.lg,
-    marginBottom: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: 'hidden',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Colors.white,
+    marginHorizontal: Layout.spacing.lg,
+    marginBottom: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.lg,
     paddingVertical: Layout.spacing.md,
-    paddingHorizontal: Layout.spacing.lg,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   logoutText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.error,
-    fontWeight: '600',
     marginLeft: Layout.spacing.sm,
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.error,
   },
 });

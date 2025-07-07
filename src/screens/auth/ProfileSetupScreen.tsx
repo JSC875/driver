@@ -66,13 +66,8 @@ export default function ProfileSetupScreen({ navigation }: any) {
         }
       }
 
-      // Navigate to home screen
-      Alert.alert('Success', 'Profile updated successfully!', [
-        { text: 'OK', onPress: () => {
-          console.log('Profile setup completed, setting test authentication');
-          setTestAuthenticated(true);
-        }}
-      ]);
+      // Navigate to DocumentUploadScreen instead of home
+      navigation.navigate('DocumentUpload');
     } catch (err: any) {
       console.error('Error updating profile:', err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');

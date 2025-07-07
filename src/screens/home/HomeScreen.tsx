@@ -10,6 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import Polyline from '@mapbox/polyline';
+import { useUser } from '@clerk/clerk-expo';
+
 const { width, height } = Dimensions.get('window');
 
 function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -313,15 +315,55 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
 }
 
 function OtpScreen({ onSubmit, onClose }: { onSubmit: (otp: string) => void, onClose: () => void }) {
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '']);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
   const anim = React.useRef(new Animated.Value(0)).current;
+  const checkAnim = React.useRef(new Animated.Value(0)).current;
+  const inputRefs = useRef<Array<TextInput | null>>([]);
+
   React.useEffect(() => {
-    Animated.timing(anim, {
+    Animated.spring(anim, {
       toValue: 1,
-      duration: 350,
+      friction: 7,
+      tension: 60,
       useNativeDriver: true,
     }).start();
   }, []);
+
+  const handleChange = (val: string, idx: number) => {
+    if (!/^[0-9]?$/.test(val)) return;
+    const newOtp = [...otp];
+    newOtp[idx] = val;
+    setOtp(newOtp);
+    if (val && idx < 3) {
+      inputRefs.current[idx + 1]?.focus();
+      setFocusedIndex(idx + 1);
+    }
+    if (!val && idx > 0) {
+      setFocusedIndex(idx - 1);
+    }
+  };
+
+  const handleKeyPress = (e: any, idx: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !otp[idx] && idx > 0) {
+      inputRefs.current[idx - 1]?.focus();
+      setFocusedIndex(idx - 1);
+    }
+  };
+
+  const handleSubmit = () => {
+    setSubmitted(true);
+    Animated.sequence([
+      Animated.timing(checkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.delay(600),
+    ]).start(() => {
+      onSubmit(otp.join(''));
+      setSubmitted(false);
+      checkAnim.setValue(0);
+    });
+  };
+
   return (
     <Animated.View style={{
       position: 'absolute',
@@ -334,40 +376,131 @@ function OtpScreen({ onSubmit, onClose }: { onSubmit: (otp: string) => void, onC
       <Animated.View style={{
         width: width - 32,
         backgroundColor: 'rgba(255,255,255,0.98)',
-        borderRadius: 24,
-        padding: 32,
-        elevation: 20,
+        borderRadius: 28,
+        padding: 36,
+        elevation: 24,
         shadowColor: '#000',
         shadowOpacity: 0.18,
         shadowRadius: 24,
         shadowOffset: { width: 0, height: 15 },
         alignItems: 'center',
-        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] }) }],
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }],
       }}>
         <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
         </TouchableOpacity>
-        <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 16, color: '#222' }}>Enter OTP</Text>
-        <Text style={{ fontSize: 18, marginBottom: 24, color: '#444' }}>Ask the user for their OTP to start the ride.</Text>
-      <View style={{ flexDirection: 'row', marginBottom: 24 }}>
+        <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: '#1877f2', letterSpacing: 1 }}>Enter OTP</Text>
+        <Text style={{ fontSize: 17, marginBottom: 28, color: '#444', textAlign: 'center' }}>Enter the 4-digit code to start your ride</Text>
+        <View style={{ flexDirection: 'row', marginBottom: 32, gap: 8 }}>
+          {otp.map((digit, idx) => (
         <TextInput
-            style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, fontSize: 24, padding: 12, width: 120, textAlign: 'center', backgroundColor: '#f9f9f9' }}
+              key={idx}
+              ref={(ref) => { inputRefs.current[idx] = ref; }}
+              style={{
+                width: 44,
+                height: 54,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: focusedIndex === idx ? '#1877f2' : '#e0e0e0',
+                backgroundColor: '#f7faff',
+                fontSize: 28,
+                color: '#222',
+                textAlign: 'center',
+                marginHorizontal: 2,
+                shadowColor: focusedIndex === idx ? '#1877f2' : 'transparent',
+                shadowOpacity: focusedIndex === idx ? 0.15 : 0,
+                shadowRadius: 6,
+                elevation: focusedIndex === idx ? 4 : 0,
+              }}
           keyboardType="number-pad"
-          maxLength={6}
-          value={otp}
-          onChangeText={setOtp}
+              maxLength={1}
+              value={digit}
+              onFocus={() => setFocusedIndex(idx)}
+              onChangeText={val => handleChange(val, idx)}
+              onKeyPress={e => handleKeyPress(e, idx)}
+              returnKeyType="done"
+              autoFocus={idx === 0}
         />
+          ))}
       </View>
       <TouchableOpacity
-          style={{ backgroundColor: otp.length < 4 ? '#b0b0b0' : '#1877f2', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
-        onPress={() => onSubmit(otp)}
-        disabled={otp.length < 4}
-          activeOpacity={otp.length < 4 ? 1 : 0.8}
+          style={{ backgroundColor: otp.every(d => d) ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 8 }}
+          onPress={handleSubmit}
+          disabled={!otp.every(d => d)}
+          activeOpacity={otp.every(d => d) ? 0.8 : 1}
       >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20 }}>Submit OTP</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>Submit OTP</Text>
       </TouchableOpacity>
+        {submitted && (
+          <Animated.View style={{ marginTop: 18, opacity: checkAnim, transform: [{ scale: checkAnim }] }}>
+            <Ionicons name="checkmark-circle" size={48} color="#22C55E" />
+          </Animated.View>
+        )}
       </Animated.View>
     </Animated.View>
+  );
+}
+
+function EndRideScreen({ onEnd, onClose }: { onEnd: () => void, onClose: () => void }) {
+  const SWIPE_WIDTH = width * 0.8;
+  const SWIPE_THRESHOLD = SWIPE_WIDTH * 0.6;
+  const swipeX = useRef(new Animated.Value(0)).current;
+  const [swiping, setSwiping] = useState(false);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (e, gestureState) => {
+        let newX = gestureState.dx;
+        if (newX < 0) newX = 0;
+        if (newX > SWIPE_WIDTH - 56) newX = SWIPE_WIDTH - 56;
+        swipeX.setValue(newX);
+        setSwiping(true);
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        if (gestureState.dx > SWIPE_THRESHOLD) {
+          Animated.timing(swipeX, {
+            toValue: SWIPE_WIDTH - 56,
+            duration: 120,
+            useNativeDriver: false,
+          }).start(() => {
+            setSwiping(false);
+            onEnd();
+            Animated.spring(swipeX, {
+              toValue: 0,
+              useNativeDriver: false,
+            }).start();
+          });
+        } else {
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: false,
+          }).start(() => setSwiping(false));
+        }
+      },
+    })
+  ).current;
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', zIndex: 9999, justifyContent: 'flex-start' }}>
+      {/* Close Button */}
+      <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 48, right: 28, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
+        <Ionicons name="close" size={26} color="#888" />
+      </TouchableOpacity>
+      {/* Title and Instructions */}
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#222', marginBottom: 18, textAlign: 'center' }}>End Ride</Text>
+        <Text style={{ fontSize: 18, color: '#444', marginBottom: 32, textAlign: 'center' }}>Swipe below to confirm you want to end the ride.</Text>
+      </View>
+      {/* Swipe Bar at Bottom */}
+      <View style={{ position: 'absolute', left: '10%', right: '10%', bottom: 48, width: '80%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A2233', borderRadius: 32, paddingVertical: 16, paddingHorizontal: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 10 }} {...panResponder.panHandlers}>
+          <Animated.View style={{ position: 'absolute', left: swipeX, top: 0, bottom: 0, width: 56, height: 56, borderRadius: 28, backgroundColor: '#26304A', alignItems: 'center', justifyContent: 'center', shadowColor: '#26304A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 8, zIndex: 2 }}>
+            <Ionicons name="arrow-forward" size={32} color="#fff" />
+          </Animated.View>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, marginLeft: 70, letterSpacing: 0.5, zIndex: 1 }}>Swipe to end ride</Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -380,6 +513,7 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose }: { ride: Ride
   const mapRef = useRef<MapView>(null);
   const dropoffPulse = useRef(new Animated.Value(1)).current;
   const dropoffBgOpacity = useRef(new Animated.Value(0.5)).current;
+  const [showEndRide, setShowEndRide] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -591,7 +725,7 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose }: { ride: Ride
               shadowRadius: 8,
               elevation: 8,
             }}
-        onPress={onEnd}
+        onPress={() => setShowEndRide(true)}
             activeOpacity={0.8}
       >
             <Ionicons name="stop-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
@@ -599,6 +733,7 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose }: { ride: Ride
       </TouchableOpacity>
     </View>
       </SafeAreaView>
+      {showEndRide && <EndRideScreen onEnd={() => { setShowEndRide(false); onEnd(); }} onClose={() => setShowEndRide(false)} />}
     </Animated.View>
   );
 }
@@ -663,6 +798,8 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: bool
 };
 
 export default function HomeScreen() {
+  const { user, isLoaded } = useUser();
+  const navigation = useNavigation<NavigationProp<any>>();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
@@ -676,10 +813,21 @@ export default function HomeScreen() {
   const [showOtp, setShowOtp] = useState(false);
   const [rideInProgress, setRideInProgress] = useState<RideRequest | null>(null);
   const sosAnim = useRef(new Animated.Value(1)).current;
-  const navigation = useNavigation<NavigationProp<any>>();
   const [menuVisible, setMenuVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const [safetyModalVisible, setSafetyModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    // Check for required documents
+    const meta = user?.unsafeMetadata || {};
+    if (!meta.bikeFrontPhoto || !meta.bikeBackPhoto || !meta.licensePhoto || !meta.rcPhoto || !meta.aadharPhoto || !meta.panPhoto) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'DocumentUpload' }],
+      });
+    }
+  }, [isLoaded, user]);
 
   // PanResponder for swipe to go online gesture
   const panResponder = useRef(
@@ -1000,34 +1148,34 @@ export default function HomeScreen() {
             >
               <Animated.View
                 style={{
-                  position: 'absolute',
-                  left: offlineSwipeX,
-                  top: 0,
-                  bottom: 0,
+                position: 'absolute',
+                left: offlineSwipeX,
+                top: 0,
+                bottom: 0,
                   width: 56,
                   height: 56,
                   borderRadius: 28,
                   backgroundColor: '#26304A',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                alignItems: 'center',
+                justifyContent: 'center',
                   shadowColor: '#26304A',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.18,
-                  shadowRadius: 8,
-                  elevation: 8,
-                  zIndex: 2,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.18,
+                shadowRadius: 8,
+                elevation: 8,
+                zIndex: 2,
                 }}
               >
                 <Ionicons name="arrow-forward" size={32} color="#fff" />
               </Animated.View>
               <Text
                 style={{
-                  color: '#fff',
-                  fontWeight: 'bold',
+                color: '#fff',
+                fontWeight: 'bold',
                   fontSize: 20,
                   marginLeft: 70,
-                  letterSpacing: 0.5,
-                  zIndex: 1,
+                letterSpacing: 0.5,
+                zIndex: 1,
                 }}
               >
                 Swipe to go offline
