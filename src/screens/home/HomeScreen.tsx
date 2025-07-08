@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Image, ScrollView, Linking, Alert, Modal, Pressable, PanResponder, TextInput, Vibration, Platform } from 'react-native';
 import MapView, { Marker, Polyline as MapPolyline, MapViewProps } from 'react-native-maps';
 import { MaterialIcons, Ionicons, FontAwesome, Entypo, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import Polyline from '@mapbox/polyline';
 import { useUser, useAuth } from '@clerk/clerk-expo';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
@@ -449,7 +450,12 @@ function EndRideScreen({ onEnd, onClose }: { onEnd: () => void, onClose: () => v
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 5,
+      onPanResponderGrant: () => {
+        if (Platform.OS === 'android') {
+          Vibration.vibrate([0, 2000], true);
+        }
+      },
       onPanResponderMove: (e, gestureState) => {
         let newX = gestureState.dx;
         if (newX < 0) newX = 0;
@@ -458,6 +464,9 @@ function EndRideScreen({ onEnd, onClose }: { onEnd: () => void, onClose: () => v
         setSwiping(true);
       },
       onPanResponderRelease: (e, gestureState) => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
         if (gestureState.dx > SWIPE_THRESHOLD) {
           Animated.timing(swipeX, {
             toValue: SWIPE_WIDTH - 56,
@@ -477,6 +486,15 @@ function EndRideScreen({ onEnd, onClose }: { onEnd: () => void, onClose: () => v
             useNativeDriver: false,
           }).start(() => setSwiping(false));
         }
+      },
+      onPanResponderTerminate: () => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
+        Animated.spring(swipeX, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
       },
     })
   ).current;
@@ -817,6 +835,9 @@ export default function HomeScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const [safetyModalVisible, setSafetyModalVisible] = useState(false);
+  const rippleAnim = useRef(new Animated.Value(0)).current;
+  const [isSwiping, setIsSwiping] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -834,7 +855,12 @@ export default function HomeScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !isOnline,
-      onMoveShouldSetPanResponder: () => !isOnline,
+      onMoveShouldSetPanResponder: (_, gesture) => !isOnline && Math.abs(gesture.dx) > 5,
+      onPanResponderGrant: () => {
+        if (Platform.OS === 'android') {
+          Vibration.vibrate([0, 2000], true);
+        }
+      },
       onPanResponderMove: (e, gestureState) => {
         if (isOnline) return;
         let newX = gestureState.dx;
@@ -844,11 +870,14 @@ export default function HomeScreen() {
         // Throttle haptic feedback
         const now = Date.now();
         if (now - lastHaptic.current > 60) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           lastHaptic.current = now;
         }
       },
       onPanResponderRelease: (e, gestureState) => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
         if (isOnline) return;
         if (gestureState.dx > SWIPE_THRESHOLD) {
           Animated.timing(swipeX, {
@@ -864,13 +893,22 @@ export default function HomeScreen() {
             toValue: 0,
             useNativeDriver: false,
           }).start();
-    }
+        }
+      },
+      onPanResponderTerminate: () => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
+        Animated.spring(swipeX, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
       },
     })
   ).current;
 
   // PanResponder for swipe to go offline gesture
-  const offlineSwipeWidth = width * 0.8; // 80% width to match modal
+  const offlineSwipeWidth = width * 0.9; // 90% width to match modal
   const offlineSwipeThreshold = offlineSwipeWidth * 0.6;
   
   // Create PanResponder function that always uses current state values
@@ -879,8 +917,13 @@ export default function HomeScreen() {
       onStartShouldSetPanResponder: () => {
         return isOnline && showOfflineScreen;
       },
-      onMoveShouldSetPanResponder: () => {
-        return isOnline && showOfflineScreen;
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        return isOnline && showOfflineScreen && Math.abs(gesture.dx) > 5;
+      },
+      onPanResponderGrant: () => {
+        if (Platform.OS === 'android') {
+          Vibration.vibrate([0, 2000], true);
+        }
       },
       onPanResponderMove: (e, gestureState) => {
         if (!isOnline || !showOfflineScreen) return;
@@ -891,11 +934,14 @@ export default function HomeScreen() {
         // Throttle haptic feedback
         const now = Date.now();
         if (now - lastHaptic.current > 60) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           lastHaptic.current = now;
         }
       },
       onPanResponderRelease: (e, gestureState) => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
         if (!isOnline || !showOfflineScreen) return;
         if (gestureState.dx > offlineSwipeThreshold) {
           Animated.timing(offlineSwipeX, {
@@ -919,6 +965,15 @@ export default function HomeScreen() {
             useNativeDriver: false,
           }).start();
         }
+      },
+      onPanResponderTerminate: () => {
+        if (Platform.OS === 'android') {
+          Vibration.cancel();
+        }
+        Animated.spring(offlineSwipeX, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
       },
     });
   };
@@ -1160,14 +1215,14 @@ export default function HomeScreen() {
             <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '500' }}>Waybill</Text>
           </TouchableOpacity>
 
-          {/* Swipe to Go Offline Bar (modal, 80% width, bottom, working like online swipe) */}
+          {/* Swipe to Go Offline Bar (modal, 90% width, bottom, working like online swipe) */}
           <View
             style={{
               position: 'absolute',
-              left: '10%',
-              right: '10%',
+              left: '5%',
+              right: '5%',
               bottom: insets.bottom > 0 ? insets.bottom + 16 : 32,
-              width: '80%',
+              width: '90%',
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
@@ -1180,10 +1235,10 @@ export default function HomeScreen() {
                 flex: 1,
                 flexDirection: 'row',
                 alignItems: 'center',
-                backgroundColor: '#1A2233',
-                borderRadius: 32,
-                paddingVertical: 16,
-                paddingHorizontal: 24,
+                backgroundColor: 'green',
+                borderRadius: 36,
+                paddingVertical: 20,
+                paddingHorizontal: 28,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.18,
@@ -1198,9 +1253,9 @@ export default function HomeScreen() {
                 left: offlineSwipeX,
                 top: 0,
                 bottom: 0,
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
+                  width: 66,
+                  height: 66,
+                  borderRadius: 32,
                   backgroundColor: '#26304A',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1212,14 +1267,14 @@ export default function HomeScreen() {
                 zIndex: 2,
                 }}
               >
-                <Ionicons name="arrow-forward" size={32} color="#fff" />
+                <Ionicons name="arrow-forward" size={36} color="#fff" />
               </Animated.View>
               <Text
                 style={{
                 color: '#fff',
                 fontWeight: 'bold',
-                  fontSize: 20,
-                  marginLeft: 70,
+                  fontSize: 22,
+                  marginLeft: 80,
                 letterSpacing: 0.5,
                 zIndex: 1,
                 }}
@@ -1318,75 +1373,55 @@ export default function HomeScreen() {
         <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
       </Animated.View>
       {/* Bottom Online/Offline Bar */}
-      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#fff', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
+      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
         {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 10 }}>
             <View style={{
-              width: '100%',
+              width: '94%',
+              marginBottom: -30,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 24,
-              gap: 12,
-            }}>
-              {/* Online Status Button */}
-              <TouchableOpacity 
-                style={{
-                  flex: 1,
-                  backgroundColor: '#00C853',
-                  borderRadius: 32,
-                  paddingVertical: 16,
-                  paddingHorizontal: 24,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.18,
-                  shadowRadius: 12,
-                  elevation: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onPress={() => {}} // No action needed for status display
-                activeOpacity={0.9}
-              >
-                <Text style={{
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  fontSize: 20,
-                  letterSpacing: 0.5,
-                }}>
-                  You're ONLINE
-                </Text>
-              </TouchableOpacity>
+              backgroundColor: '#fff',
+              borderRadius: 32,
+              paddingVertical: 16,
+              paddingHorizontal: 18,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.10,
+              shadowRadius: 8,
+              elevation: 8,
+              alignSelf: 'center',
               
-              {/* Go Offline Button */}
+            }}>
+              {/* Center Text */}
+              <Text style={{
+                color: '#00C853',
+                fontWeight: 'bold',
+                fontSize: 30,
+                letterSpacing: 0.5,
+                textAlign: 'center',
+                flex: 1,
+              }}>
+                You're online
+              </Text>
+              {/* Hamburger Icon (right) */}
               <TouchableOpacity 
                 style={{
-                  backgroundColor: '#FF3B30',
-                  borderRadius: 32,
-                  paddingVertical: 16,
-                  paddingHorizontal: 24,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.18,
-                  shadowRadius: 12,
-                  elevation: 10,
+                  backgroundColor: '#fff',
+                  borderRadius: 20,
+                  width: 40,
+                  height: 40,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  minWidth: 120,
+                  elevation: 2,
                 }}
                 onPress={goOffline}
                 activeOpacity={0.8}
               >
-                <Text style={{
-                  color: '#fff',
-                  fontWeight: 'bold',
-                  fontSize: 18,
-                  letterSpacing: 0.5,
-                }}>
-                  Go Offline
-                </Text>
+                <Entypo name="menu" size={28} color="#222" />
               </TouchableOpacity>
-          </View>
+            </View>
           </View>
         )}
       </SafeAreaView>
@@ -1394,32 +1429,14 @@ export default function HomeScreen() {
       {!isOnline && !isRideActive && (
         <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
           <View style={{
-            width: '100%',
+            width: '90%',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
+            marginLeft: '5%',
           }}>
             {/* Safety Toolkit Icon - left of swipe bar */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#fff',
-                borderRadius: 24,
-                width: 48,
-                height: 48,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 6,
-                marginRight: 12,
-              }}
-              onPress={() => setSafetyModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="shield-checkmark" size={28} color="#22C55E" />
-            </TouchableOpacity>
+
             {/* Swipe Bar */}
             <View style={{
               flex: 1,
@@ -1427,25 +1444,69 @@ export default function HomeScreen() {
               alignItems: 'center',
               backgroundColor: '#1A2233',
               borderRadius: 32,
-              paddingVertical: 16,
+              paddingVertical: 20,
               paddingHorizontal: 24,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.18,
               shadowRadius: 12,
               elevation: 10,
+              overflow: 'hidden',
             }}
               {...panResponder.panHandlers}
             >
+              {/* Gradient Progress Bar Background */}
+              <Animated.View style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: swipeX.interpolate({
+                  inputRange: [0, SWIPE_WIDTH - 56],
+                  outputRange: ['0%', '100%'],
+                  extrapolate: 'clamp',
+                }),
+                zIndex: 1,
+              }}>
+                <LinearGradient
+                  colors={['#B9F6CA', '#00C853', '#009624']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ flex: 1, borderRadius: 32 }}
+                />
+                {/* Ripple shimmer effect */}
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    left: rippleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, (SWIPE_WIDTH - 56) * 0.7],
+                    }),
+                    top: 0,
+                    bottom: 0,
+                    width: 60,
+                    opacity: 0.35,
+                    zIndex: 2,
+                  }}
+                  pointerEvents="none"
+                >
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.2)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{ flex: 1, borderRadius: 32 }}
+                  />
+                </Animated.View>
+              </Animated.View>
               <Animated.View style={{
                 position: 'absolute',
                 left: swipeX,
                 top: 0,
                 bottom: 0,
-                width: 56,
-                height: 56,
+                width: 66,
+                height: 66,
                 borderRadius: 28,
-                backgroundColor: '#26304A',
+                backgroundColor: 'green',
                 alignItems: 'center',
                 justifyContent: 'center',
                 shadowColor: '#26304A',
@@ -1453,7 +1514,7 @@ export default function HomeScreen() {
                 shadowOpacity: 0.18,
                 shadowRadius: 8,
                 elevation: 8,
-                zIndex: 2,
+                zIndex: 3,
               }}>
                 <Ionicons name="arrow-forward" size={32} color="#fff" />
             </Animated.View>
@@ -1463,7 +1524,7 @@ export default function HomeScreen() {
                 fontSize: 20,
                 marginLeft: 70,
                 letterSpacing: 0.5,
-                zIndex: 1,
+                zIndex: 4,
               }}>
                 Swipe to go online
               </Text>
@@ -1475,8 +1536,8 @@ export default function HomeScreen() {
       {isOnline && (
         <Animated.View style={{
           position: 'absolute',
-          top: height * 0.65,
-          right: 24,
+          top: '35%',
+          right: 7,
           zIndex: 1000,
           shadowColor: '#FF3B30',
           shadowOffset: { width: 0, height: 8 },
@@ -1633,13 +1694,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Custom JWT Test Button */}
-      <TouchableOpacity
-        style={{ backgroundColor: '#007AFF', padding: 10, margin: 10, borderRadius: 5 }}
-        onPress={handleFetchCustomJWT}
-      >
-        <Text style={{ color: 'white', textAlign: 'center' }}>Get Custom Clerk JWT</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
