@@ -12,6 +12,7 @@ import { StatusBar } from 'react-native';
 import Polyline from '@mapbox/polyline';
 import { useUser, useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAssignUserType } from '../../utils/helpers';
 
 const { width, height } = Dimensions.get('window');
 
@@ -851,6 +852,8 @@ export default function HomeScreen() {
     }
   }, [isLoaded, user]);
 
+  useAssignUserType('driver');
+
   // PanResponder for swipe to go online gesture
   const panResponder = useRef(
     PanResponder.create({
@@ -884,9 +887,19 @@ export default function HomeScreen() {
             toValue: SWIPE_WIDTH - 56,
             duration: 120,
             useNativeDriver: false,
-          }).start(() => {
+          }).start(async () => {
             setIsOnline(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            // Fetch JWT token when going online
+            if (user?.unsafeMetadata?.type === 'driver') {
+              try {
+                const token = await getToken({ template: 'driver-app-token' });
+                console.log('Custom Clerk JWT (online):', token);
+                // Optionally: store or use the token as needed
+              } catch (err) {
+                console.error('Failed to fetch custom JWT on go online:', err);
+              }
+            }
           });
         } else {
           Animated.spring(swipeX, {
@@ -1074,6 +1087,7 @@ export default function HomeScreen() {
 
   // Fetch custom Clerk JWT after login
   useEffect(() => {
+    if (user?.unsafeMetadata?.type !== 'driver') return;
     const fetchCustomJWT = async () => {
       try {
         const token = await getToken({ template: 'driver-app-token' });
@@ -1084,10 +1098,14 @@ export default function HomeScreen() {
       }
     };
     fetchCustomJWT();
-  }, [getToken]);
+  }, [getToken, user]);
 
   // Button handler to fetch and log the custom JWT manually
   const handleFetchCustomJWT = async () => {
+    if (user?.unsafeMetadata?.type !== 'driver') {
+      Alert.alert('Error', 'User type is not set to driver.');
+      return;
+    }
     try {
       const token = await getToken({ template: 'driver-app-token' });
       console.log('Custom Clerk JWT:', token);
