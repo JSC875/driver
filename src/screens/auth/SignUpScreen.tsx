@@ -586,13 +586,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
 
   // Step 3: Verify OTP
   const handleVerifyOTP = async () => {
-    // Prevent multiple verification attempts
-    if (isLoading || otpVerified) {
-      return;
-    }
-    
     setIsLoading(true);
-    setOtpError('');
     try {
       const otpString = otp.join('');
       console.log('OTP verification attempt with:', otpString);
@@ -636,29 +630,28 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       if (completeSignUp?.status === 'complete') {
         console.log('OTP verification successful, navigating to next step');
         setOtpVerified(true);
-        // The sign-up is complete, navigate to the next step
-        // The session will be automatically set active by Clerk
         goToNextStep();
       } else if (completeSignUp?.status === 'missing_requirements') {
         console.log('OTP verified but missing requirements, updating user data');
         console.log('Available firstName:', firstName);
         console.log('Available lastName:', lastName);
         console.log('Missing fields:', completeSignUp?.missingFields);
-        
         // OTP is verified but we need to provide the missing fields
         try {
           const updateData: any = {};
           if (firstName.trim()) updateData.firstName = firstName.trim();
           if (lastName.trim()) updateData.lastName = lastName.trim();
-          
           console.log('Updating user with data:', updateData);
           await signUp?.update(updateData);
           console.log('User data updated successfully, navigating to next step');
           setOtpVerified(true);
           goToNextStep();
+          return;
         } catch (updateErr: any) {
           console.error('Error updating user data:', updateErr);
-          const updateErrorMessage = updateErr?.errors?.[0]?.message || updateErr?.message || 'Failed to update user profile';
+          const updateErrorMessage = (updateErr && typeof updateErr === 'object' && 'errors' in updateErr && Array.isArray(updateErr.errors) && updateErr.errors[0]?.message)
+            ? updateErr.errors[0].message
+            : (updateErr && typeof updateErr === 'object' && 'message' in updateErr ? updateErr.message : 'Failed to update user profile');
           throw new Error(updateErrorMessage);
         }
       } else {
@@ -706,10 +699,11 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
         return;
       }
       
-      // Update user profile with Clerk
+      // Update user profile with Clerk and set userType to driver
       await user?.update({ 
         firstName: firstName.trim(), 
-        lastName: lastName.trim() 
+        lastName: lastName.trim(),
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
       });
       
       // TODO: Handle profile image upload if needed
@@ -729,7 +723,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   };
 
   // Step 4: Skip profile
-  const handleSkipProfile = () => {
+  const handleSkipProfile = async () => {
     // Check if this is a test OTP flow
     if (otpVerified && !user) {
       console.log('Test OTP flow detected, skipping profile setup');
@@ -741,7 +735,12 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       ]);
       return;
     }
-    
+    // Set userType in Clerk metadata if user is available
+    if (user) {
+      await user.update({
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+      });
+    }
     console.log('Profile setup skipped, user should be redirected to main app');
     // The user is now signed in and will be automatically redirected to the main app
     // Clerk's useAuth hook will handle the navigation

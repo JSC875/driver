@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
 import Polyline from '@mapbox/polyline';
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useAuth } from '@clerk/clerk-expo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -799,6 +799,7 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: bool
 
 export default function HomeScreen() {
   const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
@@ -1015,6 +1016,32 @@ export default function HomeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [rideRequest]);
+
+  // Fetch custom Clerk JWT after login
+  useEffect(() => {
+    const fetchCustomJWT = async () => {
+      try {
+        const token = await getToken({ template: 'driver-app-token' });
+        console.log('Custom Clerk JWT:', token);
+        // Optionally: send to backend or store in state
+      } catch (err) {
+        console.error('Failed to fetch custom JWT:', err);
+      }
+    };
+    fetchCustomJWT();
+  }, [getToken]);
+
+  // Button handler to fetch and log the custom JWT manually
+  const handleFetchCustomJWT = async () => {
+    try {
+      const token = await getToken({ template: 'driver-app-token' });
+      console.log('Custom Clerk JWT:', token);
+      Alert.alert('Custom Clerk JWT', token ? 'Token fetched and logged to console.' : 'No token received.');
+    } catch (err) {
+      console.error('Failed to fetch custom JWT:', err);
+      Alert.alert('Error', 'Failed to fetch custom JWT.');
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
@@ -1606,6 +1633,13 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+      {/* Custom JWT Test Button */}
+      <TouchableOpacity
+        style={{ backgroundColor: '#007AFF', padding: 10, margin: 10, borderRadius: 5 }}
+        onPress={handleFetchCustomJWT}
+      >
+        <Text style={{ color: 'white', textAlign: 'center' }}>Get Custom Clerk JWT</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
