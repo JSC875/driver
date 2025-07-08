@@ -74,7 +74,7 @@ async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, ln
   const data = await res.json();
   if (data.routes && data.routes[0]) {
     const points = Polyline.decode(data.routes[0].overview_polyline.points);
-    return points.map(([latitude, longitude]) => ({ latitude, longitude }));
+    return points.map(([latitude, longitude]: [number, number]) => ({ latitude, longitude }));
   }
   throw new Error('Directions fetch failed');
 }
@@ -869,15 +869,23 @@ export default function HomeScreen() {
   ).current;
 
   // PanResponder for swipe to go offline gesture
-  const offlinePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => isOnline && showOfflineScreen,
-      onMoveShouldSetPanResponder: () => isOnline && showOfflineScreen,
+  const offlineSwipeWidth = width * 0.8; // 80% width to match modal
+  const offlineSwipeThreshold = offlineSwipeWidth * 0.6;
+  
+  // Create PanResponder function that always uses current state values
+  const createOfflinePanResponder = () => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => {
+        return isOnline && showOfflineScreen;
+      },
+      onMoveShouldSetPanResponder: () => {
+        return isOnline && showOfflineScreen;
+      },
       onPanResponderMove: (e, gestureState) => {
         if (!isOnline || !showOfflineScreen) return;
         let newX = gestureState.dx;
         if (newX < 0) newX = 0;
-        if (newX > SWIPE_WIDTH - 56) newX = SWIPE_WIDTH - 56;
+        if (newX > offlineSwipeWidth - 56) newX = offlineSwipeWidth - 56;
         offlineSwipeX.setValue(newX);
         // Throttle haptic feedback
         const now = Date.now();
@@ -888,14 +896,19 @@ export default function HomeScreen() {
       },
       onPanResponderRelease: (e, gestureState) => {
         if (!isOnline || !showOfflineScreen) return;
-        if (gestureState.dx > SWIPE_THRESHOLD) {
+        if (gestureState.dx > offlineSwipeThreshold) {
           Animated.timing(offlineSwipeX, {
-            toValue: SWIPE_WIDTH - 56,
+            toValue: offlineSwipeWidth - 56,
             duration: 120,
             useNativeDriver: false,
           }).start(() => {
             setIsOnline(false);
             setShowOfflineScreen(false);
+            // Reset the main swipe bar to its default position
+            Animated.spring(swipeX, {
+              toValue: 0,
+              useNativeDriver: false,
+            }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             navigation.navigate('Home');
           });
@@ -906,8 +919,11 @@ export default function HomeScreen() {
           }).start();
         }
       },
-    })
-  ).current;
+    });
+  };
+  
+  // Create PanResponder instance
+  const offlinePanResponder = createOfflinePanResponder();
 
   const resetOnline = () => {
     setIsOnline(false);
@@ -1104,6 +1120,7 @@ export default function HomeScreen() {
             paddingTop: insets.top + 24,
             paddingHorizontal: 0,
           }}
+          pointerEvents="box-none"
         >
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 24, marginBottom: 16 }}>
@@ -1115,6 +1132,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={{ marginLeft: 24, marginBottom: 32 }} onPress={() => Alert.alert('Waybill', 'Waybill feature coming soon!')}>
             <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '500' }}>Waybill</Text>
           </TouchableOpacity>
+
           {/* Swipe to Go Offline Bar (modal, 80% width, bottom, working like online swipe) */}
           <View
             style={{
@@ -1128,6 +1146,7 @@ export default function HomeScreen() {
               justifyContent: 'center',
               zIndex: 10000,
             }}
+            pointerEvents="box-none"
           >
             <View
               style={{
