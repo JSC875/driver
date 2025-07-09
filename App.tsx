@@ -5,6 +5,7 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { OnlineStatusProvider } from './src/store/OnlineStatusContext';
+import { RideHistoryProvider } from './src/store/RideHistoryContext';
 
 const tokenCache = {
   async getToken(key: string) {
@@ -33,13 +34,15 @@ if (!publishableKey) {
 
 export default function App() {
   return (
-    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-      <SafeAreaProvider>
-        <OnlineStatusProvider>
-          <StatusBar style="dark" backgroundColor="#ffffff" />
-          <AppNavigator />
-        </OnlineStatusProvider>
-      </SafeAreaProvider>
-    </ClerkProvider>
+    <RideHistoryProvider>
+      <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+        <SafeAreaProvider>
+          <OnlineStatusProvider>
+            <StatusBar style="dark" backgroundColor="#ffffff" />
+            <AppNavigator />
+          </OnlineStatusProvider>
+        </SafeAreaProvider>
+      </ClerkProvider>
+    </RideHistoryProvider>
   );
 }

@@ -16,6 +16,7 @@ import { useAssignUserType } from '../../utils/helpers';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
 import socketManager from '../../utils/socket';
 import * as Location from 'expo-location';
+import { useRideHistory } from '../../store/RideHistoryContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -779,6 +780,7 @@ export default function HomeScreen() {
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const [isLocating, setIsLocating] = useState(false);
+  const { addRide } = useRideHistory();
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -995,6 +997,20 @@ export default function HomeScreen() {
 
   const handleAcceptRide = () => {
     if (rideRequest) {
+      // Save to ride history as accepted
+      addRide({
+        id: rideRequest.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: rideRequest.pickupAddress || rideRequest.from,
+        to: rideRequest.dropoffAddress || rideRequest.to,
+        driver: user?.fullName || 'You',
+        fare: Number(rideRequest.price?.replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'accepted',
+        rating: 0,
+      });
       // Send acceptance to socket server
       if (currentRideRequest) {
         acceptRide(currentRideRequest);
@@ -1006,11 +1022,22 @@ export default function HomeScreen() {
   };
 
   const handleRejectRide = () => {
-    // Send rejection to socket server
     if (currentRideRequest) {
+      addRide({
+        id: currentRideRequest.rideId + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: currentRideRequest.pickup,
+        to: currentRideRequest.drop,
+        driver: user?.fullName || 'You',
+        fare: Number(currentRideRequest.price?.replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'cancelled',
+        rating: 0,
+      });
       rejectRide(currentRideRequest);
     }
-    
     setRideRequest(null);
   };
 
@@ -1043,6 +1070,19 @@ export default function HomeScreen() {
 
   const handleEndRide = () => {
     if (rideInProgress) {
+      addRide({
+        id: rideInProgress.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: rideInProgress.pickupAddress || rideInProgress.from,
+        to: rideInProgress.dropoffAddress || rideInProgress.to,
+        driver: user?.fullName || 'You',
+        fare: Number(rideInProgress.price?.replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'completed',
+        rating: 5,
+      });
       navigation.navigate('EndRide', { ride: rideInProgress });
     }
   };
@@ -1718,12 +1758,27 @@ export default function HomeScreen() {
       )}
       {/* Navigation Screen */}
       {navigationRide && !showOtp && (
-        <NavigationScreen
-          ride={navigationRide}
-          onNavigate={handleNavigate}
-          onArrived={handleArrived}
-          onClose={() => setNavigationRide(null)}
-        />
+        <>
+          <NavigationScreen
+            ride={navigationRide}
+            onNavigate={handleNavigate}
+            onArrived={handleArrived}
+            onClose={() => setNavigationRide(null)}
+          />
+          {/* Cancel Ride Button - always visible above NavigationScreen */}
+          <View style={{ position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center', zIndex: 9999 }} pointerEvents="box-none">
+            <TouchableOpacity
+              style={{ backgroundColor: '#FF3B30', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 40, elevation: 6 }}
+              onPress={() => {
+                handleRejectRide();
+                setNavigationRide(null);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Cancel Ride</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       )}
       {/* OTP Screen */}
       {navigationRide && showOtp && (
