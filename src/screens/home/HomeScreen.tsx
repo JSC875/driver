@@ -13,6 +13,7 @@ import Polyline from '@mapbox/polyline';
 import { useUser, useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAssignUserType } from '../../utils/helpers';
+import { useOnlineStatus } from '../../store/OnlineStatusContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -742,8 +743,8 @@ export default function HomeScreen() {
   const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
+  const { isOnline, setIsOnline } = useOnlineStatus();
   const [isSOSVisible, setSOSVisible] = useState(false);
-  const [isOnline, setIsOnline] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
   const swipeX = useRef(new Animated.Value(0)).current;
   const offlineSwipeX = useRef(new Animated.Value(0)).current;

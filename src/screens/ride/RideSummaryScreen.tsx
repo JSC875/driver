@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useOnlineStatus } from '../../store/OnlineStatusContext';
 
 const feedbackTags = [
   'Great ride',
@@ -26,12 +26,10 @@ const feedbackTags = [
 
 export default function RideSummaryScreen({ navigation, route }: any) {
   const { destination, estimate, driver } = route.params;
+  const { setIsOnline } = useOnlineStatus();
   const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tip, setTip] = useState(0);
-
-  // Get setIsOnline from HomeScreen via navigation params or use a global event (for now, use navigation param if available)
-  const setIsOnline = route.params?.setIsOnline;
 
   const handleRating = (value: number) => {
     setRating(value);
@@ -51,7 +49,7 @@ export default function RideSummaryScreen({ navigation, route }: any) {
 
   const handleSubmitFeedback = () => {
     // Set driver online before navigating home
-    if (typeof setIsOnline === 'function') setIsOnline(true);
+    setIsOnline(true);
     navigation.navigate('Home');
   };
 
