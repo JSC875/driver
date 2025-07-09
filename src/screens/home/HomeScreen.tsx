@@ -14,6 +14,7 @@ import { useUser, useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAssignUserType } from '../../utils/helpers';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
+import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
 
@@ -762,6 +763,7 @@ export default function HomeScreen() {
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1280,7 +1282,7 @@ export default function HomeScreen() {
           </Animated.Text>
         </TouchableOpacity>
       )}
-      {/* Top Bar Overlay */}
+      {/* Top Bar Overlay (always visible, even offline) */}
       <Animated.View
         style={[
           styles.topBar,
@@ -1300,6 +1302,11 @@ export default function HomeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            position: 'absolute',
+            top: insets.top + 8,
+            left: 0,
+            right: 0,
+            zIndex: 2000, // ensure always on top
           },
         ]}
       >
@@ -1316,25 +1323,8 @@ export default function HomeScreen() {
           <Ionicons name="person-circle" size={32} color="#222" />
           </TouchableOpacity>
       </Animated.View>
-      {/* Center Marker */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: '48%',
-          left: '50%',
-          transform: [{ translateX: -20 }, { translateY: -32 }],
-          backgroundColor: '#fff',
-          borderRadius: 16,
-          padding: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
-      >
-        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
-      </Animated.View>
+      {/* Center Marker (fetches current location on press) */}
+      {/* Removed the center marker button as requested */}
       {/* Bottom Online/Offline Bar */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
         {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
@@ -1658,6 +1648,51 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+      {/* Location Button (right middle) */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          right: 20,
+          top: height / 2 - 30,
+          backgroundColor: '#fff',
+          borderRadius: 24,
+          width: 48,
+          height: 48,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 8,
+          zIndex: 1500,
+        }}
+        onPress={async () => {
+          try {
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission Denied', 'Location permission is required to fetch your current location.');
+              return;
+            }
+            let loc = await Location.getCurrentPositionAsync({});
+            console.log('Fetched device location:', loc.coords.latitude, loc.coords.longitude);
+            const coords = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              latitudeDelta: 0.005, // Smooth zoom in
+              longitudeDelta: 0.005,
+            };
+            if (mapRef.current) {
+              mapRef.current.animateToRegion(coords, 1000);
+            }
+          } catch (err) {
+            Alert.alert('Error', 'Failed to fetch current location.');
+          }
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="locate" size={28} color="#1877f2" />
+      </TouchableOpacity>
 
     </SafeAreaView>
   );
