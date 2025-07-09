@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAssignUserType } from '../../utils/helpers';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
 import socketManager from '../../utils/socket';
+import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
 
@@ -91,7 +92,7 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
   const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const pickupPulse = useRef(new Animated.Value(1)).current;
   const pickupBgOpacity = useRef(new Animated.Value(0.5)).current;
 
@@ -453,7 +454,7 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
   const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const dropoffPulse = useRef(new Animated.Value(1)).current;
   const dropoffBgOpacity = useRef(new Animated.Value(0.5)).current;
 
@@ -708,28 +709,32 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 18, textAlign: 'center' }}>Menu</Text>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Home'); onClose(); }}>
             <Ionicons name="home" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Home</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Refer'); onClose(); }}>
+            <Ionicons name="gift" size={26} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Refer</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('RideHistory'); onClose(); }}>
             <Ionicons name="time" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Ride History</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Ride History</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Wallet'); onClose(); }}>
             <Ionicons name="wallet" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Wallet</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Wallet</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Settings'); onClose(); }}>
             <Ionicons name="settings" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Settings</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Settings</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('HelpSupport'); onClose(); }}>
             <Ionicons name="help-circle" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Support</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Support</Text>
           </TouchableOpacity>
           <View style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onLogout}>
             <Ionicons name="log-out" size={24} color="#FF3B30" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#FF3B30' }}>Logout</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FF3B30' }}>Logout</Text>
           </TouchableOpacity>
         </Animated.View>
         {halfScreen && (
@@ -772,6 +777,8 @@ export default function HomeScreen() {
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1120,6 +1127,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="dark-content" translucent />
       {/* Map */}
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
         initialRegion={{
           latitude: 17.4375, // Example: Hyderabad
@@ -1389,6 +1397,7 @@ export default function HomeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            zIndex: 2000, // Ensure always above overlays
           },
         ]}
       >
@@ -1425,25 +1434,83 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
-      {/* Center Marker */}
-      <Animated.View
+      {/* Floating location icon - now outside the top bar, truly floating at right mid-screen */}
+      {isOnline && (
+        <TouchableOpacity
+          disabled={isLocating}
         style={{
           position: 'absolute',
-          top: '48%',
-          left: '50%',
-          transform: [{ translateX: -20 }, { translateY: -32 }],
+            right: 20,
+            top: '50%',
+            transform: [{ translateY: -32 }],
           backgroundColor: '#fff',
-          borderRadius: 16,
-          padding: 8,
+            borderRadius: 32,
+            padding: 16,
+            elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 8,
-        }}
-      >
-        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
-      </Animated.View>
+            zIndex: 2100,
+            opacity: isLocating ? 0.6 : 1,
+          }}
+          onPress={async () => {
+            setIsLocating(true);
+            try {
+              console.log('Checking if location services are enabled...');
+              const servicesEnabled = await Location.hasServicesEnabledAsync();
+              console.log('Location services enabled:', servicesEnabled);
+              if (!servicesEnabled) {
+                Alert.alert('Location Disabled', 'Please enable location services in your device settings.');
+                setIsLocating(false);
+                return;
+              }
+              console.log('Requesting foreground permissions...');
+              let { status } = await Location.requestForegroundPermissionsAsync();
+              console.log('Permission status:', status);
+              if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Location permission is required to fetch your current location.');
+                setIsLocating(false);
+                return;
+              }
+              console.log('Fetching current position (Highest accuracy)...');
+              let location = null;
+              try {
+                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+                console.log('Current location (Highest):', location.coords);
+              } catch (err1) {
+                console.log('Highest accuracy failed, trying Balanced accuracy...', err1);
+                try {
+                  location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                  console.log('Current location (Balanced):', location.coords);
+                } catch (err2) {
+                  console.log('Balanced accuracy also failed:', err2);
+                  const errMsg = (err2 && typeof err2 === 'object' && 'message' in err2) ? (err2 as Error).message : '';
+                  Alert.alert('Error', `Failed to fetch current location. Try going outdoors or enabling location services. ${errMsg}`);
+                  setTimeout(() => setIsLocating(false), 2000);
+                  return;
+                }
+              }
+              if (location && mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }, 1000);
+              }
+            } catch (error) {
+              console.log('Location error:', error);
+              const errMsg = (error && typeof error === 'object' && 'message' in error) ? (error as Error).message : '';
+              Alert.alert('Error', `Failed to fetch current location. ${errMsg}`);
+            } finally {
+              setTimeout(() => setIsLocating(false), 2000); // debounce for 2 seconds
+            }
+          }}
+        >
+          <Ionicons name="compass" size={32} color="#1877f2" />
+        </TouchableOpacity>
+      )}
       {/* Bottom Online/Offline Bar */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
         {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
@@ -1677,7 +1744,7 @@ export default function HomeScreen() {
         onClose={() => setMenuVisible(false)}
         onNavigate={(screen) => {
           setMenuVisible(false);
-          navigation.navigate(screen as never);
+            navigation.navigate(screen as never);
         }}
         halfScreen={false}
         onLogout={handleLogout}
