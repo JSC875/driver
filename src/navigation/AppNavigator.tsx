@@ -28,6 +28,7 @@ import FindingDriverScreen from '../screens/ride/FindingDriverScreen';
 import LiveTrackingScreen from '../screens/ride/LiveTrackingScreen';
 import ChatScreen from '../screens/ride/ChatScreen';
 import RideSummaryScreen from '../screens/ride/RideSummaryScreen';
+import EndRideScreen from '../screens/ride/EndRideScreen';
 
 // Profile Screens
 import ProfileScreen from '../screens/profile/ProfileScreen';
@@ -115,6 +116,7 @@ function MainNavigator() {
       <Stack.Screen name="LiveTracking" component={LiveTrackingScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="RideSummary" component={RideSummaryScreen} />
+      <Stack.Screen name="EndRide" component={EndRideScreen} />
       {/* Profile Flow */}
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="RideHistory" component={RideHistoryScreen} />

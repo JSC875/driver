@@ -446,28 +446,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const goToNextStep = () => setStep((s) => s + 1);
   const goToPrevStep = () => setStep((s) => s - 1);
 
-  // Debug function to test session activation
-  const testSessionActivation = async () => {
-    console.log('=== TESTING SESSION ACTIVATION ===');
-    console.log('SignUp status:', signUp?.status);
-    console.log('SignUp createdSessionId:', signUp?.createdSessionId);
-    console.log('Is signed in:', isSignedIn);
-    
-    if (signUp && signUp.createdSessionId) {
-      try {
-        console.log('Attempting to activate session...');
-        await setSignUpActive({ session: signUp.createdSessionId });
-        console.log('Session activation successful!');
-        Alert.alert('Success', 'Session activated successfully!');
-      } catch (err) {
-        console.error('Session activation error:', err);
-        Alert.alert('Error', 'Failed to activate session');
-      }
-    } else {
-      console.log('No session ID available');
-      Alert.alert('Info', 'No session ID available');
-    }
-  };
+
 
   // Step 2: Send OTP
   const handleSendOTP = async () => {
@@ -819,20 +798,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
                   firstName={firstName}
                   lastName={lastName}
                 />
-                {/* Debug button - remove in production */}
-                <TouchableOpacity
-                  onPress={testSessionActivation}
-                  style={{
-                    backgroundColor: '#ff6600',
-                    padding: 10,
-                    margin: 10,
-                    borderRadius: 5,
-                  }}
-                >
-                  <Text style={{ color: 'white', textAlign: 'center' }}>
-                    Test Session Activation
-                  </Text>
-                </TouchableOpacity>
+
               </>
             )}
           </View>
