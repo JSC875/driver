@@ -76,7 +76,7 @@ export default function ConfirmRideScreen({ navigation, route }: any) {
 
         {/* Trip Summary */}
         <View style={styles.tripCard}>
-          <Text style={styles.tripTitle}>Trip Summary</Text>
+          <Text style={styles.tripTitle}>Trip Summary.</Text>
           
           <View style={styles.tripRoute}>
             <View style={styles.routePoint}>
