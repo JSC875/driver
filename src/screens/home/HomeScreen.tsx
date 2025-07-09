@@ -1735,30 +1735,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Floating Test Button to go to FindingDriverScreen */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          bottom: 32,
-          right: 24,
-          backgroundColor: '#1877f2',
-          paddingVertical: 16,
-          paddingHorizontal: 20,
-          borderRadius: 32,
-          elevation: 8,
-          zIndex: 9999,
-        }}
-        onPress={() => navigation.navigate('FindingDriver', {
-          destination: { name: 'Test Destination' },
-          estimate: { fare: 100, distance: '5 km', duration: '10 min' },
-          paymentMethod: 'cash',
-          driver: { name: 'Test Driver' }
-        })}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
-          Go to FindingDriverScreen (Test)
-        </Text>
-      </TouchableOpacity>
+
     </SafeAreaView>
   );
 }
