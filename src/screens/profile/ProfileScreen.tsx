@@ -6,14 +6,19 @@ import {
   ScrollView,
   Image,
   Animated,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/clerk-expo';
+import { useAuth } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 
 export default function ProfileScreen() {
   const { user } = useUser();
+  const { signOut } = useAuth();
+  const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -109,6 +114,17 @@ export default function ProfileScreen() {
           )}
         </View>
       </ScrollView>
+      <View style={{ padding: 24 }}>
+        <TouchableOpacity
+          style={{ backgroundColor: '#FF3B30', borderRadius: 8, padding: 16, alignItems: 'center' }}
+          onPress={async () => {
+            await signOut();
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Logout</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }

@@ -681,7 +681,7 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
   );
 }
 
-const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: boolean; onClose: () => void; onNavigate: (screen: string) => void; halfScreen?: boolean }) => {
+const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { visible: boolean; onClose: () => void; onNavigate: (screen: string) => void; halfScreen?: boolean; onLogout: () => void }) => {
   return (
     <Modal
       visible={visible}
@@ -727,7 +727,7 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: bool
             <Text style={{ fontSize: 18, color: '#222' }}>Support</Text>
           </TouchableOpacity>
           <View style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onClose}>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onLogout}>
             <Ionicons name="log-out" size={24} color="#FF3B30" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 18, color: '#FF3B30' }}>Logout</Text>
           </TouchableOpacity>
@@ -742,7 +742,7 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen }: { visible: bool
 
 export default function HomeScreen() {
   const { user, isLoaded } = useUser();
-  const { getToken } = useAuth();
+  const { getToken, signOut } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
   const { 
     isOnline, 
@@ -1105,6 +1105,12 @@ export default function HomeScreen() {
       console.error('Failed to fetch custom JWT:', err);
       Alert.alert('Error', 'Failed to fetch custom JWT.');
     }
+  };
+
+  // Add logout handler
+  const handleLogout = async () => {
+    await signOut();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   return (
@@ -1670,14 +1676,11 @@ export default function HomeScreen() {
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
         onNavigate={(screen) => {
-          try {
-            navigation.navigate(screen as never);
-          } catch (error) {
-            console.log(`Navigation error to ${screen}:`, error);
-            // Fallback navigation or show error message
-          }
+          setMenuVisible(false);
+          navigation.navigate(screen as never);
         }}
-        halfScreen
+        halfScreen={false}
+        onLogout={handleLogout}
       />
       {/* Safety Toolkit Modal */}
       <Modal
