@@ -175,68 +175,49 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         )}
       </MapView>
       
-      {/* Top Routing Bar */}
+      {/* Highlighted Route Info & Pickup/Dropoff Card */}
       <View style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0,
-        backgroundColor: 'linear-gradient(90deg, #e3f0ff 0%, #f6faff 100%)', // soft blue gradient
-        paddingTop: 50,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        elevation: 10,
+        top: insets.top + 16,
+        left: 16,
+        right: 16,
+        // Use a soft blue-green background for the whole card
+        backgroundColor: '#e0f7fa', // light blue-green (cyan)
+        borderRadius: 20,
+        padding: 20,
         shadowColor: '#000',
-        shadowOpacity: 0.10,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
       }}>
-        {/* Close Button */}
-        <TouchableOpacity
-          onPress={onClose} 
-          style={{ 
-            position: 'absolute', 
-            top: 60, 
-            right: 20, 
-            zIndex: 10, 
-            backgroundColor: 'rgba(0,0,0,0.1)', 
-            borderRadius: 20, 
-            padding: 8,
-            width: 40,
-            height: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="close" size={24} color="#333" />
-        </TouchableOpacity>
-        
-        {/* Route Header */}
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ backgroundColor: '#1877f2', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-            <Ionicons name="navigate" size={28} color="#fff" />
+        {/* Top Bar with Route Info - No Close Icon */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+        }}>
+          {/* Remove the close button here */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Navigate to Pickup</Text>
+            <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>ETA: {ride.pickup}</Text>
           </View>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Navigate to Pickup</Text>
-          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>ETA: {ride.pickup}</Text>
+          <View style={{ width: 40 }} />
         </View>
-
-        {/* Route Information */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
+        {/* Animated Pickup/Dropoff Cards - blend into card, no separate backgrounds */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {/* Pickup (Animated) */}
           <Animated.View style={{ flex: 1, opacity: pickupBgOpacity }}>
             <Animated.View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#B9F6CA',
+              backgroundColor: '#00e676', // static, bright green
               borderRadius: 16,
               marginRight: 12,
-              padding: 6,
+              padding: 8,
               transform: [{ scale: pickupPulse }],
-              shadowColor: '#00C853',
-              shadowOpacity: 0.5,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 8,
             }}>
               <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                 <Ionicons name="location" size={16} color="#fff" />
@@ -247,12 +228,10 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               </View>
             </Animated.View>
           </Animated.View>
-          
           {/* Arrow */}
           <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-down" size={20} color="#999" />
+            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
           </View>
-          
           {/* Dropoff (Static) */}
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
@@ -268,7 +247,7 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
 
       {/* Bottom Action Buttons */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 12, paddingHorizontal: 20 }}>
           <TouchableOpacity
             style={{ 
               backgroundColor: '#1877f2', 
@@ -285,14 +264,13 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               shadowRadius: 8,
               elevation: 8,
             }}
-        onPress={onNavigate}
+            onPress={onNavigate}
             activeOpacity={0.8}
-      >
+          >
             <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
-      </TouchableOpacity>
-          
-      <TouchableOpacity
+          </TouchableOpacity>
+          <TouchableOpacity
             style={{ 
               backgroundColor: '#00C853', 
               borderRadius: 16, 
@@ -308,13 +286,13 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               shadowRadius: 8,
               elevation: 8,
             }}
-        onPress={onArrived}
+            onPress={onArrived}
             activeOpacity={0.8}
-      >
+          >
             <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Arrived at Pickup</Text>
-      </TouchableOpacity>
-    </View>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </Animated.View>
   );
@@ -538,56 +516,31 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
         )}
       </MapView>
       
-      {/* Top Routing Bar */}
+      {/* Top Card with Route Info & Pickup/Dropoff */}
       <View style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0,
-        backgroundColor: 'linear-gradient(90deg, #f7faff 0%, #e3f0ff 100%)', // soft blue gradient
-        paddingTop: 50,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        elevation: 10,
+        top: 56,
+        left: 16,
+        right: 16,
+        backgroundColor: '#e0f7fa', // match NavigationScreen
+        borderRadius: 20,
+        padding: 20,
         shadowColor: '#000',
-        shadowOpacity: 0.10,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
       }}>
-        {/* Close Button */}
-        <TouchableOpacity
-          onPress={onClose} 
-          style={{ 
-            position: 'absolute', 
-            top: 60, 
-            right: 20, 
-            zIndex: 10, 
-            backgroundColor: 'rgba(0,0,0,0.1)', 
-            borderRadius: 20, 
-            padding: 8,
-            width: 40,
-            height: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="close" size={24} color="#333" />
-        </TouchableOpacity>
-        
         {/* Route Header */}
         <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ backgroundColor: '#00C853', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-            <Ionicons name="car" size={28} color="#fff" />
-          </View>
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
           <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
         </View>
-
         {/* Route Information */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
-          {/* Pickup (Static) */}
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
-            <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Pickup (plain, not highlighted) */}
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 12, backgroundColor: 'transparent', borderRadius: 16, padding: 8 }}>
+            <View style={{ backgroundColor: '#e0e0e0', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
               <Ionicons name="checkmark" size={16} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
@@ -595,20 +548,18 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
               <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
             </View>
           </View>
-          
           {/* Arrow */}
           <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-down" size={20} color="#999" />
+            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
           </View>
-          
-          {/* Dropoff (Animated) */}
+          {/* Dropoff (Animated, lighter highlight) */}
           <Animated.View style={{ flex: 1, opacity: dropoffBgOpacity }}>
             <Animated.View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#FFD6B0',
+              backgroundColor: '#ffe0b2', // lighter orange
               borderRadius: 16,
-              padding: 6,
+              padding: 8,
               transform: [{ scale: dropoffPulse }],
               shadowColor: '#FF6B35',
               shadowOpacity: 0.5,
@@ -616,12 +567,12 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
               shadowOffset: { width: 0, height: 2 },
               elevation: 8,
             }}>
-              <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View style={{ backgroundColor: '#ffb74d', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                 <Ionicons name="flag" size={16} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
-                <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
+                <Text style={{ fontSize: 13, color: '#222', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
               </View>
             </Animated.View>
           </Animated.View>
@@ -1002,10 +953,10 @@ export default function HomeScreen() {
         id: rideRequest.id + '-' + Date.now(),
         date: new Date().toISOString().slice(0, 10),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: rideRequest.pickupAddress || rideRequest.from,
-        to: rideRequest.dropoffAddress || rideRequest.to,
+        from: rideRequest.pickupAddress || '',
+        to: rideRequest.dropoffAddress || '',
         driver: user?.fullName || 'You',
-        fare: Number(rideRequest.price?.replace(/[^\d.]/g, '')) || 0,
+        fare: Number(String(rideRequest.price).replace(/[^\d.]/g, '')) || 0,
         distance: 0,
         duration: 0,
         status: 'accepted',
@@ -1030,7 +981,7 @@ export default function HomeScreen() {
         from: currentRideRequest.pickup,
         to: currentRideRequest.drop,
         driver: user?.fullName || 'You',
-        fare: Number(currentRideRequest.price?.replace(/[^\d.]/g, '')) || 0,
+        fare: Number(String(currentRideRequest.price).replace(/[^\d.]/g, '')) || 0,
         distance: 0,
         duration: 0,
         status: 'cancelled',
@@ -1074,10 +1025,10 @@ export default function HomeScreen() {
         id: rideInProgress.id + '-' + Date.now(),
         date: new Date().toISOString().slice(0, 10),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: rideInProgress.pickupAddress || rideInProgress.from,
-        to: rideInProgress.dropoffAddress || rideInProgress.to,
+        from: rideInProgress.pickupAddress || '',
+        to: rideInProgress.dropoffAddress || '',
         driver: user?.fullName || 'You',
-        fare: Number(rideInProgress.price?.replace(/[^\d.]/g, '')) || 0,
+        fare: Number(String(rideInProgress.price).replace(/[^\d.]/g, '')) || 0,
         distance: 0,
         duration: 0,
         status: 'completed',
