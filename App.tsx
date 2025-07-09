@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
 import AppNavigator from './src/navigation/AppNavigator';
+import { SocketProvider } from "./src/utils/SocketProvider";
 
 const tokenCache = {
   async getToken(key: string) {
@@ -34,8 +35,10 @@ export default function App() {
   return (
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <SafeAreaProvider>
-        <StatusBar style="dark" backgroundColor="#ffffff" />
-        <AppNavigator />
+        <SocketProvider>
+          <StatusBar style="dark" backgroundColor="#ffffff" />
+          <AppNavigator />
+        </SocketProvider>
       </SafeAreaProvider>
     </ClerkProvider>
   );

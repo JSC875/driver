@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -12,11 +11,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { useSocket } from '../../utils/SocketProvider';
 
 export default function FindingDriverScreen({ navigation, route }: any) {
   const { destination, estimate, paymentMethod, driver } = route.params;
   const [searchText, setSearchText] = useState('Finding nearby drivers...');
   const pulseAnim = new Animated.Value(1);
+  const socket = useSocket();
 
   useEffect(() => {
     // Pulse animation
@@ -50,12 +51,24 @@ export default function FindingDriverScreen({ navigation, route }: any) {
       });
     }, 5000);
 
+    // Listen for ride_request event from the server
+    if (socket) {
+      socket.on('ride_request', (data) => {
+        setSearchText('Driver assigned! Preparing your ride...');
+        // Optionally, navigate or update state with data
+        // navigation.replace('LiveTracking', { ...data });
+      });
+    }
+
     return () => {
       pulse.stop();
       clearTimeout(timer1);
       clearTimeout(timer2);
+      if (socket) {
+        socket.off('ride_request');
+      }
     };
-  }, []);
+  }, [socket]);
 
   const handleCancel = () => {
     navigation.navigate('Home');

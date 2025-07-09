@@ -893,9 +893,32 @@ export default function HomeScreen() {
             // Fetch JWT token when going online
             if (user?.unsafeMetadata?.type === 'driver') {
               try {
-                const token = await getToken({ template: 'driver-app-token' });
-                console.log('Custom Clerk JWT (online):', token);
-                // Optionally: store or use the token as needed
+                const onlineToken = await getToken({ template: 'driver_app_token' });
+                console.log('Custom Clerk JWT (online):', onlineToken);
+                // Call backend to get user by Clerk ID
+                if (user.id && onlineToken) {
+                  try {
+                    const response = await fetch(`https://roqet-production.up.railway.app/users/getUserByClerkUserId/${user.id}`, {
+                      method: 'GET',
+                      headers: {
+                        'Authorization': `Bearer ${onlineToken}`,
+                        'Content-Type': 'application/json',
+                      },
+                    });
+                    const text = await response.text();
+                    console.log('Backend response status:', response.status);
+                    console.log('Backend response text:', text);
+                    let data = null;
+                    try {
+                      data = text ? JSON.parse(text) : null;
+                    } catch (e) {
+                      console.error('Failed to parse backend response as JSON:', e);
+                    }
+                    console.log('Backend user response:', data);
+                  } catch (err) {
+                    console.error('Failed to fetch user from backend:', err);
+                  }
+                }
               } catch (err) {
                 console.error('Failed to fetch custom JWT on go online:', err);
               }
@@ -1090,8 +1113,8 @@ export default function HomeScreen() {
     if (user?.unsafeMetadata?.type !== 'driver') return;
     const fetchCustomJWT = async () => {
       try {
-        const token = await getToken({ template: 'driver-app-token' });
-        console.log('Custom Clerk JWT:', token);
+        const customToken = await getToken({ template: 'driver_app_token' });
+        console.log('Custom Clerk JWT:', customToken);
         // Optionally: send to backend or store in state
       } catch (err) {
         console.error('Failed to fetch custom JWT:', err);
@@ -1107,9 +1130,9 @@ export default function HomeScreen() {
       return;
     }
     try {
-      const token = await getToken({ template: 'driver-app-token' });
-      console.log('Custom Clerk JWT:', token);
-      Alert.alert('Custom Clerk JWT', token ? 'Token fetched and logged to console.' : 'No token received.');
+      const manualToken = await getToken({ template: 'driver_app_token' });
+      console.log('Custom Clerk JWT:', manualToken);
+      Alert.alert('Custom Clerk JWT', manualToken ? 'Token fetched and logged to console.' : 'No token received.');
     } catch (err) {
       console.error('Failed to fetch custom JWT:', err);
       Alert.alert('Error', 'Failed to fetch custom JWT.');
@@ -1712,6 +1735,30 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+      {/* Floating Test Button to go to FindingDriverScreen */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          bottom: 32,
+          right: 24,
+          backgroundColor: '#1877f2',
+          paddingVertical: 16,
+          paddingHorizontal: 20,
+          borderRadius: 32,
+          elevation: 8,
+          zIndex: 9999,
+        }}
+        onPress={() => navigation.navigate('FindingDriver', {
+          destination: { name: 'Test Destination' },
+          estimate: { fare: 100, distance: '5 km', duration: '10 min' },
+          paymentMethod: 'cash',
+          driver: { name: 'Test Driver' }
+        })}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+          Go to FindingDriverScreen (Test)
+        </Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }

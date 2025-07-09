@@ -11,11 +11,8 @@ import {
   FlatList, 
   TextInput, 
   Image, 
-  Alert,
-  Animated,
-  Dimensions,
+  Alert 
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSignUp, useUser, useAuth } from '@clerk/clerk-expo';
@@ -23,9 +20,6 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
-import { useAuthStore } from '../../store/useAuthStore';
-
-const { width, height } = Dimensions.get('window');
 
 // Types
 interface NameStepProps {
@@ -58,7 +52,6 @@ interface OtpStepProps {
   resendOtp: () => void;
   canResend: boolean;
   timer: number;
-  otpVerified: boolean;
 }
 
 interface PhotoStepProps {
@@ -77,67 +70,32 @@ interface CountryItem {
 
 // Step 1: Name Entry
 function NameStep({ firstName, lastName, setFirstName, setLastName, onNext }: NameStepProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
   return (
-    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: '25%' }]} />
-        </View>
-        <Text style={styles.progress}>Step 1 of 4</Text>
-      </View>
-      
-      <View style={styles.headerContainer}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="person" size={48} color="#1877f2" />
-        </View>
-        <Text style={styles.stepTitle}>What's your name?</Text>
-        <Text style={styles.stepSubtitle}>Let's get to know you better</Text>
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Input
-          label="First Name"
-          placeholder="Enter your first name"
-          value={firstName}
-          onChangeText={setFirstName}
-          leftIcon="person"
-        />
-        <Input
-          label="Last Name"
-          placeholder="Enter your last name"
-          value={lastName}
-          onChangeText={setLastName}
-          leftIcon="person"
-        />
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Next"
-          onPress={onNext}
-          fullWidth
-          disabled={!firstName.trim()}
-        />
-      </View>
-    </Animated.View>
+    <View style={styles.stepContainer}>
+      <Text style={styles.progress}>Step 1 of 4</Text>
+      <Text style={styles.stepTitle}>What's your name?</Text>
+      <Input
+        label="First Name"
+        placeholder="Enter your first name"
+        value={firstName}
+        onChangeText={setFirstName}
+        leftIcon="person"
+      />
+      <Input
+        label="Last Name"
+        placeholder="Enter your last name"
+        value={lastName}
+        onChangeText={setLastName}
+        leftIcon="person"
+      />
+      <Button
+        title="Next"
+        onPress={onNext}
+        fullWidth
+        disabled={!firstName.trim() || !lastName.trim()}
+        style={{ marginTop: 24 }}
+      />
+    </View>
   );
 }
 
@@ -153,24 +111,6 @@ function PhoneStep({
   onBack, 
   isLoading 
 }: PhoneStepProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
   const countryList: CountryItem[] = [
     { code: '+91', name: 'India' },
     { code: '+1', name: 'USA' },
@@ -185,41 +125,26 @@ function PhoneStep({
   ];
 
   return (
-    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: '50%' }]} />
-        </View>
-        <Text style={styles.progress}>Step 2 of 4</Text>
-      </View>
-      
-      <View style={styles.headerContainer}>
-        <View style={styles.iconContainer}>
-          <Ionicons name="phone-portrait" size={48} color="#1877f2" />
-        </View>
-        <Text style={styles.stepTitle}>What's your mobile number?</Text>
-        <Text style={styles.stepSubtitle}>We'll send you a verification code</Text>
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Input
-          label="Mobile Number"
-          placeholder="Enter your 10-digit mobile number"
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          keyboardType="phone-pad"
-          maxLength={10}
-          leftElement={
-            <TouchableOpacity
-              onPress={() => setCountryModalVisible(true)}
-              style={styles.countryCodeButton}
-            >
-              <Text style={styles.countryCodeText}>{countryCode}</Text>
-              <Ionicons name="chevron-down" size={18} color="#666" />
-            </TouchableOpacity>
-          }
-        />
-      </View>
+    <View style={styles.stepContainer}>
+      <Text style={styles.progress}>Step 2 of 4</Text>
+      <Text style={styles.stepTitle}>What's your mobile number?</Text>
+      <Input
+        label="Mobile Number"
+        placeholder="Enter your 10-digit mobile number"
+        value={phoneNumber}
+        onChangeText={setPhoneNumber}
+        keyboardType="phone-pad"
+        maxLength={10}
+        leftElement={
+          <TouchableOpacity
+            onPress={() => setCountryModalVisible(true)}
+            style={styles.countryCodeButton}
+          >
+            <Text style={styles.countryCodeText}>{countryCode}</Text>
+            <Ionicons name="chevron-down" size={18} color={Colors.gray400} />
+          </TouchableOpacity>
+        }
+      />
       
       {/* Country Code Modal */}
       <Modal
@@ -236,7 +161,7 @@ function PhoneStep({
                 onPress={() => setCountryModalVisible(false)}
                 style={styles.modalCloseButton}
               >
-                <Ionicons name="close" size={24} color="#222" />
+                <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -260,23 +185,22 @@ function PhoneStep({
         </View>
       </Modal>
       
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Send OTP"
-          onPress={onNext}
-          fullWidth
-          loading={isLoading}
-          disabled={phoneNumber.length !== 10}
-        />
-        <Button
-          title="Back"
-          onPress={onBack}
-          fullWidth
-          variant="secondary"
-          style={{ marginTop: 12 }}
-        />
-      </View>
-    </Animated.View>
+      <Button
+        title="Send OTP"
+        onPress={onNext}
+        fullWidth
+        loading={isLoading}
+        disabled={phoneNumber.length !== 10}
+        style={{ marginTop: 24 }}
+      />
+      <Button
+        title="Back"
+        onPress={onBack}
+        fullWidth
+        variant="secondary"
+        style={{ marginTop: 12 }}
+      />
+    </View>
   );
 }
 
@@ -290,17 +214,22 @@ function OtpStep({
   error, 
   resendOtp, 
   canResend, 
-  timer,
-  otpVerified
+  timer 
 }: OtpStepProps) {
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const handleOtpChange = (value: string, index: number) => {
+    console.log(`OtpStep - handleOtpChange: index=${index}, value="${value}", length=${value.length}`);
+    
     // Only allow single digit
-    if (value.length > 1) return;
+    if (value.length > 1) {
+      console.log('OtpStep - Value too long, ignoring');
+      return;
+    }
     
     const newOtp = [...otp];
     newOtp[index] = value;
+    console.log('OtpStep - New OTP array:', newOtp);
     setOtp(newOtp);
     
     // Auto-focus next input
@@ -355,11 +284,11 @@ function OtpStep({
       </View>
       
       <Button
-        title={otpVerified ? "Verifying..." : "Verify"}
+        title="Verify"
         onPress={onVerify}
         fullWidth
         loading={isLoading}
-        disabled={otp.join('').length !== 6 || otpVerified}
+        disabled={otp.join('').length !== 6}
         style={{ marginTop: 24 }}
       />
       <Button
@@ -380,65 +309,17 @@ function PhotoStep({
   onComplete, 
   onSkip, 
   onBack, 
-  isLoading 
-}: PhotoStepProps) {
-  const handleImagePicker = async () => {
+  isLoading,
+  firstName,
+  lastName
+}: PhotoStepProps & { firstName: string; lastName: string }) {
+  const handleImagePicker = () => {
     Alert.alert(
       'Select Photo',
       'Choose how you want to add your photo',
       [
-        { 
-          text: 'Camera', 
-          onPress: async () => {
-            try {
-              const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-              if (permissionResult.granted === false) {
-                Alert.alert('Permission Required', 'Camera permission is required to take a photo.');
-                return;
-              }
-              
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-              });
-              
-              if (!result.canceled && result.assets[0]) {
-                setProfileImage(result.assets[0].uri);
-              }
-            } catch (error) {
-              console.error('Error taking photo:', error);
-              Alert.alert('Error', 'Failed to take photo. Please try again.');
-            }
-          }
-        },
-        { 
-          text: 'Gallery', 
-          onPress: async () => {
-            try {
-              const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (permissionResult.granted === false) {
-                Alert.alert('Permission Required', 'Gallery permission is required to select a photo.');
-                return;
-              }
-              
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-              });
-              
-              if (!result.canceled && result.assets[0]) {
-                setProfileImage(result.assets[0].uri);
-              }
-            } catch (error) {
-              console.error('Error selecting photo:', error);
-              Alert.alert('Error', 'Failed to select photo. Please try again.');
-            }
-          }
-        },
+        { text: 'Camera', onPress: () => console.log('Open Camera') },
+        { text: 'Gallery', onPress: () => console.log('Open Gallery') },
         { text: 'Cancel', style: 'cancel' }
       ]
     );
@@ -463,24 +344,33 @@ function PhotoStep({
             <Ionicons name="camera" size={32} color={Colors.gray400} />
           </View>
         )}
-        {profileImage && (
-          <View style={styles.imageSelectedIndicator}>
-            <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-          </View>
-        )}
       </TouchableOpacity>
       
-      <Text style={styles.imageHint}>
-        {profileImage ? 'Photo selected! Tap to change' : 'Tap to upload'}
-      </Text>
+      <Text style={styles.imageHint}>Tap to upload</Text>
+      
+      {(!firstName.trim() || !lastName.trim()) && (
+        <Text style={styles.errorText}>
+          Please provide both first name and last name to continue
+        </Text>
+      )}
       
       <Button
         title="Complete"
         onPress={onComplete}
         fullWidth
         loading={isLoading}
+        disabled={!firstName.trim() || !lastName.trim()}
         style={{ marginTop: 24 }}
       />
+      {(!firstName.trim() || !lastName.trim()) && (
+        <Button
+          title="Back to Name Step"
+          onPress={onBack}
+          fullWidth
+          variant="secondary"
+          style={{ marginTop: 12 }}
+        />
+      )}
       <Button
         title="I'll do it later"
         onPress={onSkip}
@@ -514,11 +404,9 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const [timer, setTimer] = useState<number>(30);
   const [canResend, setCanResend] = useState<boolean>(false);
   const [signUpCreated, setSignUpCreated] = useState<boolean>(false);
-  const [otpVerified, setOtpVerified] = useState<boolean>(false);
-  const { signUp, isLoaded } = useSignUp();
+  const { signUp, setActive: setSignUpActive, isLoaded } = useSignUp();
   const { user } = useUser();
-  const { setTestAuthenticated } = useAuthStore();
-  const { getToken } = useAuth();
+  const { isSignedIn } = useAuth();
 
   // Timer for OTP resend
   useEffect(() => {
@@ -546,9 +434,40 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     setSignUpCreated(false);
   }, [phoneNumber, countryCode]);
 
+  // Monitor authentication state
+  useEffect(() => {
+    console.log('SignUpScreen - Auth state changed. isSignedIn:', isSignedIn);
+    if (isSignedIn) {
+      console.log('SignUpScreen - User is signed in!');
+    }
+  }, [isSignedIn]);
+
   // Step navigation
   const goToNextStep = () => setStep((s) => s + 1);
   const goToPrevStep = () => setStep((s) => s - 1);
+
+  // Debug function to test session activation
+  const testSessionActivation = async () => {
+    console.log('=== TESTING SESSION ACTIVATION ===');
+    console.log('SignUp status:', signUp?.status);
+    console.log('SignUp createdSessionId:', signUp?.createdSessionId);
+    console.log('Is signed in:', isSignedIn);
+    
+    if (signUp && signUp.createdSessionId) {
+      try {
+        console.log('Attempting to activate session...');
+        await setSignUpActive({ session: signUp.createdSessionId });
+        console.log('Session activation successful!');
+        Alert.alert('Success', 'Session activated successfully!');
+      } catch (err) {
+        console.error('Session activation error:', err);
+        Alert.alert('Error', 'Failed to activate session');
+      }
+    } else {
+      console.log('No session ID available');
+      Alert.alert('Info', 'No session ID available');
+    }
+  };
 
   // Step 2: Send OTP
   const handleSendOTP = async () => {
@@ -560,24 +479,36 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     setIsLoading(true);
     try {
       const formattedPhone = `${countryCode}${phoneNumber.replace(/^0+/, '')}`;
-      console.log('Creating sign-up with phone number:', formattedPhone);
+      console.log('SignUpScreen - Sending OTP to:', formattedPhone);
+      console.log('SignUpScreen - SignUp object:', signUp);
+      console.log('SignUpScreen - Is loaded:', isLoaded);
       
-      if (!signUpCreated) {
-        await signUp.create({ phoneNumber: formattedPhone });
-        setSignUpCreated(true);
-        console.log('Sign-up created successfully');
+      if (!signUp) {
+        console.error('SignUpScreen - SignUp object is null during OTP send');
+        Alert.alert('Error', 'Authentication service not available. Please try again.');
+        return;
       }
       
-      console.log('Preparing phone number verification');
+      if (!signUpCreated) {
+        console.log('SignUpScreen - Creating sign up...');
+        await signUp.create({ phoneNumber: formattedPhone });
+        setSignUpCreated(true);
+        console.log('SignUpScreen - Sign up created successfully');
+      }
+      
+      console.log('SignUpScreen - Preparing phone number verification...');
       await signUp.preparePhoneNumberVerification({ strategy: 'phone_code' });
-      console.log('OTP sent successfully');
+      console.log('SignUpScreen - OTP sent successfully');
       goToNextStep();
     } catch (err: unknown) {
-      console.error('Error sending OTP:', err);
+      console.error('SignUpScreen - Error sending OTP:', err);
       if (typeof err === 'object' && err && 'errors' in err) {
         // @ts-ignore
-        Alert.alert('Error', err.errors?.[0]?.message || 'Failed to send OTP');
+        const errorMessage = err.errors?.[0]?.message || 'Failed to send OTP';
+        console.error('SignUpScreen - Error message:', errorMessage);
+        Alert.alert('Error', errorMessage);
       } else {
+        console.error('SignUpScreen - Unknown error type:', err);
         Alert.alert('Error', 'Failed to send OTP');
       }
     } finally {
@@ -588,80 +519,94 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   // Step 3: Verify OTP
   const handleVerifyOTP = async () => {
     setIsLoading(true);
+    setOtpError('');
     try {
       const otpString = otp.join('');
-      console.log('OTP verification attempt with:', otpString);
-      console.log('signUp available:', !!signUp);
-      console.log('signUp status:', signUp?.status);
+      console.log('SignUpScreen - Verifying OTP:', otpString);
+      console.log('SignUpScreen - OTP length:', otpString.length);
+      console.log('SignUpScreen - OTP array:', otp);
+      console.log('SignUpScreen - SignUp object:', signUp);
+      console.log('SignUpScreen - Is loaded:', isLoaded);
+      console.log('SignUpScreen - SignUpCreated:', signUpCreated);
       
       if (otpString.length !== 6) {
         setOtpError('Please enter complete OTP');
         setIsLoading(false);
         return;
       }
-      
-      console.log('Attempting OTP verification with code:', otpString);
-      
-      // For development/testing: Check if it's a test OTP (123456)
-      if (otpString === '123456') {
-        console.log('Test OTP detected, simulating successful verification');
-        setOtpVerified(true);
-        // Simulate successful verification for testing
-        setTimeout(() => {
-          console.log('Test OTP verification complete, proceeding to profile setup');
-          goToNextStep();
-        }, 1000);
+
+      if (!signUp) {
+        console.error('SignUpScreen - SignUp object is null');
+        setOtpError('Authentication service not available. Please try again.');
+        setIsLoading(false);
         return;
       }
 
-      // For development: Also accept any 6-digit code starting with '1' as valid
-      if (otpString.length === 6 && otpString.startsWith('1')) {
-        console.log('Development OTP detected, simulating successful verification');
-        setOtpVerified(true);
-        setTimeout(() => {
-          console.log('Development OTP verification complete, proceeding to profile setup');
-          goToNextStep();
-        }, 1000);
+      // Test: Check if the OTP contains only numbers
+      if (!/^\d{6}$/.test(otpString)) {
+        console.error('SignUpScreen - OTP contains non-numeric characters');
+        setOtpError('OTP should contain only numbers');
+        setIsLoading(false);
         return;
       }
       
-      const completeSignUp = await signUp?.attemptPhoneNumberVerification({ code: otpString });
-      console.log('OTP verification result:', completeSignUp);
+      console.log('SignUpScreen - Attempting phone number verification...');
+      console.log('SignUpScreen - OTP code being sent:', otpString);
       
-      if (completeSignUp?.status === 'complete') {
-        console.log('OTP verification successful, navigating to next step');
-        setOtpVerified(true);
-        goToNextStep();
-      } else if (completeSignUp?.status === 'missing_requirements') {
-        console.log('OTP verified but missing requirements, updating user data');
-        console.log('Available firstName:', firstName);
-        console.log('Available lastName:', lastName);
-        console.log('Missing fields:', completeSignUp?.missingFields);
-        // OTP is verified but we need to provide the missing fields
-        try {
-          const updateData: any = {};
-          if (firstName.trim()) updateData.firstName = firstName.trim();
-          if (lastName.trim()) updateData.lastName = lastName.trim();
-          console.log('Updating user with data:', updateData);
-          await signUp?.update(updateData);
-          console.log('User data updated successfully, navigating to next step');
-          setOtpVerified(true);
+      const completeSignUp = await signUp.attemptPhoneNumberVerification({ code: otpString });
+      console.log('SignUpScreen - Verification result:', completeSignUp);
+      console.log('SignUpScreen - Verification status:', completeSignUp?.status);
+      console.log('SignUpScreen - Phone verification status:', completeSignUp?.verifications?.phoneNumber?.status);
+      console.log('SignUpScreen - Created session ID:', completeSignUp?.createdSessionId);
+      
+      // Check if phone number is verified
+      const isPhoneVerified = completeSignUp?.verifications?.phoneNumber?.status === 'verified';
+      console.log('SignUpScreen - Is phone verified:', isPhoneVerified);
+      
+      if (isPhoneVerified) {
+        console.log('SignUpScreen - Phone verification successful!');
+        console.log('SignUpScreen - Missing fields:', completeSignUp?.missingFields);
+        
+        // Check if we have all required fields (phone is verified, but we still need first_name and last_name)
+        if (completeSignUp?.missingFields?.includes('first_name') || completeSignUp?.missingFields?.includes('last_name')) {
+          console.log('SignUpScreen - Phone verified but missing name fields, proceeding to next step');
           goToNextStep();
-          return;
-        } catch (updateErr: any) {
-          console.error('Error updating user data:', updateErr);
-          const updateErrorMessage = (updateErr && typeof updateErr === 'object' && 'errors' in updateErr && Array.isArray(updateErr.errors) && updateErr.errors[0]?.message)
-            ? updateErr.errors[0].message
-            : (updateErr && typeof updateErr === 'object' && 'message' in updateErr ? updateErr.message : 'Failed to update user profile');
-          throw new Error(updateErrorMessage);
+        } else if (completeSignUp?.status === 'complete') {
+          console.log('SignUpScreen - All requirements met, setting active session...');
+          console.log('SignUpScreen - Created session ID:', completeSignUp.createdSessionId);
+          
+          // Set the active session
+          if (setSignUpActive && completeSignUp.createdSessionId) {
+            await setSignUpActive({ session: completeSignUp.createdSessionId });
+            console.log('SignUpScreen - Session activated successfully');
+          } else {
+            console.error('SignUpScreen - setSignUpActive is not available or no session ID');
+          }
+          goToNextStep();
+        } else {
+          console.log('SignUpScreen - Phone verified but status not complete, proceeding anyway');
+          goToNextStep();
         }
       } else {
-        console.log('OTP verification failed with status:', completeSignUp?.status);
-        throw new Error('OTP verification failed');
+        console.log('SignUpScreen - Phone verification failed');
+        console.log('SignUpScreen - Complete signup object:', completeSignUp);
+        setOtpError('Invalid OTP. Please try again.');
       }
     } catch (err: any) {
-      console.error('OTP verification error:', err);
-      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Invalid OTP. Please try again.';
+      console.error('SignUpScreen - OTP Verification Error:', err);
+      console.error('SignUpScreen - Error details:', err.errors);
+      console.error('SignUpScreen - Error message:', err.message);
+      console.error('SignUpScreen - Error code:', err.code);
+      console.error('SignUpScreen - Error type:', typeof err);
+      console.error('SignUpScreen - Full error object:', JSON.stringify(err, null, 2));
+      
+      let errorMessage = 'Invalid OTP. Please try again.';
+      if (err?.errors?.[0]?.message) {
+        errorMessage = err.errors[0].message;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       setOtpError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -676,30 +621,9 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
       setOtpError('');
-      setOtpVerified(false); // Reset verification state
       Alert.alert('Success', 'OTP sent successfully');
     } catch (err: any) {
       Alert.alert('Error', 'Failed to resend OTP. Please try again.');
-    }
-  };
-
-  // Helper to wait for user to be defined
-  const waitForUser = async (user: any, maxTries = 10, delay = 200) => {
-    for (let i = 0; i < maxTries; i++) {
-      if (user) return user;
-      await new Promise(res => setTimeout(res, delay));
-    }
-    throw new Error('User not available after signup');
-  };
-
-  const fetchAndStoreJWT = async () => {
-    try {
-      const token = await getToken({ template: 'driver-app-token' });
-      // Store token in global store or local state as needed
-      console.log('Fetched JWT after signup:', token);
-      // Optionally: pass token to Home via navigation params
-    } catch (err) {
-      console.error('Failed to fetch JWT after signup:', err);
     }
   };
 
@@ -707,32 +631,71 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const handleCompleteProfile = async () => {
     setIsLoading(true);
     try {
-      // Check if this is a test OTP flow (user might not be properly signed in)
-      if (otpVerified && !user) {
-        console.log('Test OTP flow detected, bypassing Clerk user update');
-        // For test OTP, we'll simulate successful profile completion
-        Alert.alert('Success', 'Profile setup completed!', [
-          { text: 'OK', onPress: () => {
-            console.log('Test flow completed, setting test authentication');
-            setTestAuthenticated(true);
-          }}
-        ]);
+      console.log('SignUpScreen - Completing profile...');
+      console.log('SignUpScreen - First name:', firstName);
+      console.log('SignUpScreen - Last name:', lastName);
+      console.log('SignUpScreen - Current auth state - isSignedIn:', isSignedIn);
+      
+      // Validate that both names are provided
+      if (!firstName.trim() || !lastName.trim()) {
+        Alert.alert('Error', 'Please enter both first name and last name');
+        setIsLoading(false);
         return;
       }
-      // Wait for user to be defined
-      await waitForUser(user);
-      // Update user profile with Clerk and set userType to driver
-      await user?.update({ 
-        firstName: firstName.trim(), 
-        lastName: lastName.trim(),
-        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
-      });
-      // Fetch JWT after signup/profile completion
-      await fetchAndStoreJWT();
-      // The user is now signed in and will be automatically redirected to the main app
-      // Clerk's useAuth hook will handle the navigation
-    } catch (err) {
-      console.error('Error updating profile:', err);
+      
+      // Update the signup with first and last name
+      if (signUp) {
+        await signUp.update({
+          firstName: firstName.trim(),
+          lastName: lastName.trim()
+        });
+        console.log('SignUpScreen - Profile updated successfully');
+        console.log('SignUpScreen - SignUp status after update:', signUp.status);
+        // Check if we need to complete the signup
+        if (signUp.status === 'complete') {
+          console.log('SignUpScreen - SignUp is complete, setting active session...');
+          if (setSignUpActive && signUp.createdSessionId) {
+            await setSignUpActive({ session: signUp.createdSessionId });
+            console.log('SignUpScreen - Session activated successfully');
+          }
+        } else {
+          console.log('SignUpScreen - SignUp status is not complete:', signUp.status);
+          console.log('SignUpScreen - Missing fields:', signUp.missingFields);
+          // Try to complete the signup manually
+          try {
+            console.log('SignUpScreen - Attempting to complete signup...');
+            // Since we've already verified the phone and updated the name, 
+            // we should be able to complete the signup
+            console.log('SignUpScreen - SignUp should be complete now');
+          } catch (completionErr) {
+            console.error('SignUpScreen - Error completing signup:', completionErr);
+          }
+        }
+      }
+      // Set userType in Clerk metadata if user is available
+      if (user) {
+        await user.update({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          unsafeMetadata: { ...user.unsafeMetadata, type: 'customer' }
+        });
+        console.log('SignUpScreen - Clerk user updated with name');
+      }
+      
+      // TODO: Handle profile image upload if needed
+      // if (profileImage) {
+      //   await user?.setProfileImage({ file: profileImage });
+      // }
+      
+      console.log('SignUpScreen - Profile completion successful');
+      console.log('SignUpScreen - Final auth state - isSignedIn:', isSignedIn);
+      Alert.alert('Success', 'Profile updated successfully!', [
+        { text: 'OK', onPress: () => {
+          console.log('SignUpScreen - Profile completion alert dismissed');
+        }}
+      ]);
+    } catch (err: any) {
+      console.error('SignUpScreen - Profile completion error:', err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
       setIsLoading(false);
@@ -740,31 +703,51 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   };
 
   // Step 4: Skip profile
-  const handleSkipProfile = async () => {
-    // Check if this is a test OTP flow
-    if (otpVerified && !user) {
-      console.log('Test OTP flow detected, skipping profile setup');
-      Alert.alert('Profile Setup', 'You can complete your profile later from the settings.', [
-        { text: 'OK', onPress: () => {
-          console.log('Test flow completed, setting test authentication');
-          setTestAuthenticated(true);
-        }}
-      ]);
+  const handleSkipProfile = () => {
+    console.log('SignUpScreen - Skipping profile setup');
+    console.log('SignUpScreen - Current auth state - isSignedIn:', isSignedIn);
+    console.log('SignUpScreen - SignUp status:', signUp?.status);
+    console.log('SignUpScreen - First name:', firstName);
+    console.log('SignUpScreen - Last name:', lastName);
+    
+    // Check if names are missing
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert(
+        'Name Required', 
+        'Please provide both first name and last name to complete your profile.',
+        [
+          { text: 'Go Back', onPress: () => goToPrevStep() },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
       return;
     }
-    // Wait for user to be defined
-    await waitForUser(user);
-    // Set userType in Clerk metadata if user is available
-    if (user) {
-      await user.update({
-        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
-      });
+    
+    // Check if we can complete the signup without name
+    if (signUp && signUp.status === 'complete') {
+      console.log('SignUpScreen - SignUp is complete, setting active session...');
+      if (setSignUpActive && signUp.createdSessionId) {
+        setSignUpActive({ session: signUp.createdSessionId }).then(() => {
+          console.log('SignUpScreen - Session activated successfully on skip');
+        }).catch(err => {
+          console.error('SignUpScreen - Error activating session on skip:', err);
+        });
+      }
+    } else {
+      console.log('SignUpScreen - SignUp status is not complete:', signUp?.status);
+      console.log('SignUpScreen - Missing fields:', signUp?.missingFields);
     }
-    // Fetch JWT after signup/profile skip
-    await fetchAndStoreJWT();
-    console.log('Profile setup skipped, user should be redirected to main app');
-    // The user is now signed in and will be automatically redirected to the main app
-    // Clerk's useAuth hook will handle the navigation
+    
+    Alert.alert(
+      'Profile Setup', 
+      'You can complete your profile later from the settings.',
+      [
+        { text: 'OK', onPress: () => {
+          console.log('SignUpScreen - Profile skip alert dismissed');
+          console.log('SignUpScreen - Auth state after skip - isSignedIn:', isSignedIn);
+        }}
+      ]
+    );
   };
 
   return (
@@ -821,19 +804,36 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
                 resendOtp={handleResendOTP}
                 canResend={canResend}
                 timer={timer}
-                otpVerified={otpVerified}
               />
             )}
             
             {step === 4 && (
-              <PhotoStep
-                profileImage={profileImage}
-                setProfileImage={setProfileImage}
-                onComplete={handleCompleteProfile}
-                onSkip={handleSkipProfile}
-                onBack={goToPrevStep}
-                isLoading={isLoading}
-              />
+              <>
+                <PhotoStep
+                  profileImage={profileImage}
+                  setProfileImage={setProfileImage}
+                  onComplete={handleCompleteProfile}
+                  onSkip={handleSkipProfile}
+                  onBack={goToPrevStep}
+                  isLoading={isLoading}
+                  firstName={firstName}
+                  lastName={lastName}
+                />
+                {/* Debug button - remove in production */}
+                <TouchableOpacity
+                  onPress={testSessionActivation}
+                  style={{
+                    backgroundColor: '#ff6600',
+                    padding: 10,
+                    margin: 10,
+                    borderRadius: 5,
+                  }}
+                >
+                  <Text style={{ color: 'white', textAlign: 'center' }}>
+                    Test Session Activation
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </ScrollView>
@@ -868,53 +868,18 @@ const styles = StyleSheet.create({
   stepContainer: {
     marginTop: 40,
   },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  progressBar: {
-    height: 10,
-    backgroundColor: Colors.gray200,
-    borderRadius: 5,
-    flex: 1,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 5,
-  },
   progress: {
     color: Colors.primary,
     fontWeight: '600',
-    marginLeft: 8,
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  iconContainer: {
-    backgroundColor: Colors.gray100,
-    padding: 16,
-    borderRadius: 80,
     marginBottom: 16,
+    textAlign: 'center',
   },
   stepTitle: {
-    fontSize: Layout.fontSize.xl,
+    fontSize: Layout.fontSize.xxl,
     fontWeight: 'bold',
     color: Colors.text,
-    marginBottom: 16,
-  },
-  stepSubtitle: {
-    color: Colors.textSecondary,
+    marginBottom: 32,
     textAlign: 'center',
-    fontSize: 14,
-  },
-  inputContainer: {
-    marginBottom: 24,
-  },
-  buttonContainer: {
-    marginTop: 24,
   },
   countryCodeButton: {
     flexDirection: 'row',
@@ -1020,7 +985,6 @@ const styles = StyleSheet.create({
   profileImageContainer: {
     alignItems: 'center',
     marginBottom: 16,
-    position: 'relative',
   },
   profileImage: {
     width: 120,
@@ -1043,17 +1007,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     fontSize: 14,
-  },
-  imageSelectedIndicator: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
 });
