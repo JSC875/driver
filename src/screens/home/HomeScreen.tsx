@@ -14,7 +14,7 @@ import { useUser, useAuth } from '@clerk/clerk-expo';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAssignUserType } from '../../utils/helpers';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
-import * as Location from 'expo-location';
+import socketManager from '../../utils/socket';
 
 const { width, height } = Dimensions.get('window');
 
@@ -744,7 +744,16 @@ export default function HomeScreen() {
   const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
-  const { isOnline, setIsOnline } = useOnlineStatus();
+  const { 
+    isOnline, 
+    setIsOnline, 
+    isSocketConnected, 
+    currentRideRequest, 
+    acceptRide, 
+    rejectRide,
+    sendLocationUpdate,
+    sendRideStatusUpdate
+  } = useOnlineStatus();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
   const swipeX = useRef(new Animated.Value(0)).current;
@@ -763,7 +772,6 @@ export default function HomeScreen() {
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -980,12 +988,22 @@ export default function HomeScreen() {
 
   const handleAcceptRide = () => {
     if (rideRequest) {
+      // Send acceptance to socket server
+      if (currentRideRequest) {
+        acceptRide(currentRideRequest);
+      }
+      
       setNavigationRide(rideRequest);
       setRideRequest(null);
     }
   };
 
   const handleRejectRide = () => {
+    // Send rejection to socket server
+    if (currentRideRequest) {
+      rejectRide(currentRideRequest);
+    }
+    
     setRideRequest(null);
   };
 
@@ -1031,6 +1049,32 @@ export default function HomeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [rideRequest]);
+
+  // Handle incoming ride requests from socket
+  useEffect(() => {
+    if (currentRideRequest && isOnline) {
+      console.log('🚗 New ride request received from socket:', currentRideRequest);
+      
+      // Convert socket ride request to local format
+      const localRideRequest: RideRequest = {
+        id: currentRideRequest.rideId,
+        price: `₹${currentRideRequest.price}`,
+        type: currentRideRequest.rideType || 'Mini',
+        tag: 'Hyderabad',
+        rating: '4.95',
+        verified: true,
+        pickup: '5 min (2.1 km) away',
+        pickupAddress: currentRideRequest.pickup,
+        dropoff: '25 min (12.3 km) trip',
+        dropoffAddress: currentRideRequest.drop,
+      };
+      
+      setRideRequest(localRideRequest);
+      
+      // Play haptic feedback for new ride request
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [currentRideRequest, isOnline]);
 
   // Fetch custom Clerk JWT after login
   useEffect(() => {
@@ -1250,39 +1294,76 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Test Ride Request Button (show only when online and no ride in progress) */}
+      {/* Test Buttons (show only when online and no ride in progress) */}
       {isOnline && !isRideActive && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 170,
-            right: 24,
-            backgroundColor: '#1877f2',
-            borderRadius: 32,
-            paddingVertical: 16,
-            paddingHorizontal: 28,
-            elevation: 8,
-            zIndex: 100,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-          }}
-          onPress={handleTestRideRequest}
-          activeOpacity={0.7}
-        >
-          <Animated.Text
+        <View style={{
+          position: 'absolute',
+          bottom: 170,
+          right: 24,
+          flexDirection: 'column',
+          gap: 12,
+          zIndex: 100,
+        }}>
+          <TouchableOpacity
             style={{
-              color: '#fff',
-              fontWeight: 'bold',
-              fontSize: 18,
+              backgroundColor: '#1877f2',
+              borderRadius: 32,
+              paddingVertical: 16,
+              paddingHorizontal: 28,
+              elevation: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
             }}
+            onPress={handleTestRideRequest}
+            activeOpacity={0.7}
           >
-            Test Ride Request
-          </Animated.Text>
-        </TouchableOpacity>
+            <Animated.Text
+              style={{
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: 18,
+              }}
+            >
+              Test Ride Request
+            </Animated.Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#00C853',
+              borderRadius: 32,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              elevation: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+            }}
+            onPress={() => {
+              socketManager.sendTestEvent({ 
+                message: 'Hello from driver app!',
+                timestamp: new Date().toISOString(),
+                driverId: 'driver_001'
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <Animated.Text
+              style={{
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: 14,
+              }}
+            >
+              Test Socket
+            </Animated.Text>
+          </TouchableOpacity>
+        </View>
       )}
-      {/* Top Bar Overlay (always visible, even offline) */}
+      {/* Top Bar Overlay */}
       <Animated.View
         style={[
           styles.topBar,
@@ -1302,11 +1383,6 @@ export default function HomeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            position: 'absolute',
-            top: insets.top + 8,
-            left: 0,
-            right: 0,
-            zIndex: 2000, // ensure always on top
           },
         ]}
       >
@@ -1319,12 +1395,49 @@ export default function HomeScreen() {
           <Text style={styles.speedZero}> | </Text>
           <Text style={styles.speedLimit}>80</Text>
         </View>
-        <TouchableOpacity style={styles.iconCircle} onPress={() => navigation.navigate('Profile')}>
-          <Ionicons name="person-circle" size={32} color="#222" />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Socket Connection Status */}
+          {isOnline && (
+            <View style={{
+              backgroundColor: isSocketConnected ? '#00C853' : '#FF3B30',
+              borderRadius: 8,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              marginRight: 8,
+            }}>
+              <Text style={{
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 'bold',
+              }}>
+                {isSocketConnected ? 'CONNECTED' : 'DISCONNECTED'}
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity style={styles.iconCircle} onPress={() => navigation.navigate('Profile')}>
+            <Ionicons name="person-circle" size={32} color="#222" />
           </TouchableOpacity>
+        </View>
       </Animated.View>
-      {/* Center Marker (fetches current location on press) */}
-      {/* Removed the center marker button as requested */}
+      {/* Center Marker */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: '48%',
+          left: '50%',
+          transform: [{ translateX: -20 }, { translateY: -32 }],
+          backgroundColor: '#fff',
+          borderRadius: 16,
+          padding: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 8,
+          elevation: 8,
+        }}
+      >
+        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
+      </Animated.View>
       {/* Bottom Online/Offline Bar */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
         {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
@@ -1648,52 +1761,45 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Location Button (right middle) */}
-      <TouchableOpacity
-        style={{
+      {/* Ride Request Overlay */}
+      {rideRequest && (
+        <View style={{
           position: 'absolute',
+          top: 100,
+          left: 20,
           right: 20,
-          top: height / 2 - 30,
           backgroundColor: '#fff',
-          borderRadius: 24,
-          width: 48,
-          height: 48,
-          alignItems: 'center',
-          justifyContent: 'center',
+          borderRadius: 16,
+          padding: 24,
+          zIndex: 2000,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
           shadowRadius: 8,
-          elevation: 8,
-          zIndex: 1500,
-        }}
-        onPress={async () => {
-          try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-              Alert.alert('Permission Denied', 'Location permission is required to fetch your current location.');
-              return;
-            }
-            let loc = await Location.getCurrentPositionAsync({});
-            console.log('Fetched device location:', loc.coords.latitude, loc.coords.longitude);
-            const coords = {
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-              latitudeDelta: 0.005, // Smooth zoom in
-              longitudeDelta: 0.005,
-            };
-            if (mapRef.current) {
-              mapRef.current.animateToRegion(coords, 1000);
-            }
-          } catch (err) {
-            Alert.alert('Error', 'Failed to fetch current location.');
-          }
-        }}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="locate" size={28} color="#1877f2" />
-      </TouchableOpacity>
-
+          elevation: 12,
+          alignItems: 'center',
+        }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>New Ride Request</Text>
+          <Text style={{ fontSize: 16, marginBottom: 4 }}>Pickup: {rideRequest.pickupAddress}</Text>
+          <Text style={{ fontSize: 16, marginBottom: 4 }}>Dropoff: {rideRequest.dropoffAddress}</Text>
+          <Text style={{ fontSize: 16, marginBottom: 4 }}>Type: {rideRequest.type}</Text>
+          <Text style={{ fontSize: 16, marginBottom: 12 }}>Price: {rideRequest.price}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+            <TouchableOpacity
+              style={{ backgroundColor: '#34C759', padding: 12, borderRadius: 8, flex: 1, marginRight: 8 }}
+              onPress={handleAcceptRide}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ backgroundColor: '#FF3B30', padding: 12, borderRadius: 8, flex: 1, marginLeft: 8 }}
+              onPress={handleRejectRide}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
