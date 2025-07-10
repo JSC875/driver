@@ -20,6 +20,143 @@ import { useRideHistory } from '../../store/RideHistoryContext';
 
 const { width, height } = Dimensions.get('window');
 
+function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
+  const [selectedReason, setSelectedReason] = useState<string>('');
+  const anim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+
+  const cancelReasons = [
+    'Passenger not found at pickup location',
+    'Passenger requested cancellation',
+    'Vehicle breakdown',
+    'Traffic/road conditions',
+    'Personal emergency',
+    'Unsafe pickup location',
+    'Other'
+  ];
+
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: visible ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
+
+  const handleConfirm = () => {
+    if (selectedReason) {
+      onConfirm(selectedReason);
+      setSelectedReason('');
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: anim.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)'] }),
+      justifyContent: 'center',
+      alignItems: 'center',
+      opacity: anim,
+      zIndex: 10000,
+    }}>
+      <Animated.View style={{
+        width: width - 40,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
+      }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222', marginBottom: 16, textAlign: 'center' }}>
+          Cancel Ride
+        </Text>
+        <Text style={{ fontSize: 16, color: '#666', marginBottom: 20, textAlign: 'center' }}>
+          Please select a reason for cancelling this ride
+        </Text>
+        
+        <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+          {cancelReasons.map((reason, index) => (
+            <TouchableOpacity
+              key={index}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                backgroundColor: selectedReason === reason ? '#e3f2fd' : '#f8f9fa',
+                marginBottom: 8,
+                borderWidth: 2,
+                borderColor: selectedReason === reason ? '#1877f2' : 'transparent',
+              }}
+              onPress={() => setSelectedReason(reason)}
+              activeOpacity={0.7}
+            >
+              <View style={{
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                borderWidth: 2,
+                borderColor: selectedReason === reason ? '#1877f2' : '#ccc',
+                backgroundColor: selectedReason === reason ? '#1877f2' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}>
+                {selectedReason === reason && (
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                )}
+              </View>
+              <Text style={{
+                fontSize: 15,
+                color: selectedReason === reason ? '#1877f2' : '#333',
+                fontWeight: selectedReason === reason ? '600' : '400',
+                flex: 1,
+              }}>
+                {reason}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={{ flexDirection: 'row', marginTop: 20, gap: 12 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: '#f8f9fa',
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#e0e0e0',
+            }}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: '#666', fontWeight: '600', fontSize: 16 }}>Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: selectedReason ? '#ff4444' : '#ccc',
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: 'center',
+            }}
+            onPress={handleConfirm}
+            disabled={!selectedReason}
+            activeOpacity={selectedReason ? 0.7 : 1}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel Ride</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
     <Modal
@@ -93,9 +230,64 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
   const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
+  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [isLocationReady, setIsLocationReady] = useState(false);
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const pickupPulse = useRef(new Animated.Value(1)).current;
   const pickupBgOpacity = useRef(new Animated.Value(0.5)).current;
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  // Start location tracking
+  useEffect(() => {
+    const startLocationTracking = async () => {
+      try {
+        // Request location permissions
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          setIsLocationReady(true); // Mark as ready even if denied
+          return;
+        }
+
+        // Get initial location
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setDriverLocation({
+          latitude: initialLocation.coords.latitude,
+          longitude: initialLocation.coords.longitude,
+        });
+        setIsLocationReady(true);
+
+        // Start watching location
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000, // Update every 5 seconds
+            distanceInterval: 10, // Update every 10 meters
+          },
+          (location) => {
+            setDriverLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error('Error starting location tracking:', error);
+        setIsLocationReady(true); // Mark as ready even if error
+      }
+    };
+
+    startLocationTracking();
+
+    // Cleanup location subscription
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -104,13 +296,28 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
-        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-        setRouteCoords(route);
+        
+        // Wait for location to be ready before calculating route
+        if (isLocationReady) {
+          // Always prioritize driver location to pickup route
+          if (driverLocation) {
+            const route = await fetchRoute(
+              { lat: driverLocation.latitude, lng: driverLocation.longitude },
+              pickup,
+              GOOGLE_MAPS_API_KEY
+            );
+            setRouteCoords(route);
+          } else {
+            // Only fallback to pickup-to-dropoff if no driver location at all
+            const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+            setRouteCoords(route);
+          }
+        }
       } catch (e) {
-        // handle error
+        console.error('Error fetching route:', e);
       }
     })();
-  }, [ride.pickupAddress, ride.dropoffAddress]);
+  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation, isLocationReady]);
 
   useEffect(() => {
     if (routeCoords.length > 1 && mapRef.current) {
@@ -165,13 +372,33 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         showsUserLocation
       >
         {pickupCoord && (
-          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+          <Marker 
+            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
+            title="Pickup"
+            pinColor="#00C853"
+          />
         )}
         {dropoffCoord && (
-          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+          <Marker 
+            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
+            title="Dropoff"
+            pinColor="#FF6B35"
+          />
         )}
         {routeCoords.length > 1 && (
-          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+          <MapPolyline 
+            coordinates={routeCoords} 
+            strokeWidth={4} 
+            strokeColor="#1877f2"
+            zIndex={1}
+          />
+        )}
+        {driverLocation && (
+          <Marker
+            coordinate={driverLocation}
+            title="You"
+            pinColor="#1877f2"
+          />
         )}
       </MapView>
       
@@ -204,8 +431,20 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
             <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Navigate to Pickup</Text>
             <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>ETA: {ride.pickup}</Text>
           </View>
-          <View style={{ width: 40 }} />
-        </View>
+          {/* Small Cancel Button */}
+        <TouchableOpacity
+          style={{ 
+              backgroundColor: '#ff4444',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+          }}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Cancel</Text>
+        </TouchableOpacity>
+          </View>
         {/* Animated Pickup/Dropoff Cards - blend into card, no separate backgrounds */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {/* Pickup (Animated) */}
@@ -264,13 +503,13 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               shadowRadius: 8,
               elevation: 8,
             }}
-            onPress={onNavigate}
+        onPress={onNavigate}
             activeOpacity={0.8}
-          >
+      >
             <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+      </TouchableOpacity>
+      <TouchableOpacity
             style={{ 
               backgroundColor: '#00C853', 
               borderRadius: 16, 
@@ -286,13 +525,13 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               shadowRadius: 8,
               elevation: 8,
             }}
-            onPress={onArrived}
+        onPress={onArrived}
             activeOpacity={0.8}
-          >
+      >
             <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Arrived at Pickup</Text>
-          </TouchableOpacity>
-        </View>
+      </TouchableOpacity>
+    </View>
       </SafeAreaView>
     </Animated.View>
   );
@@ -436,7 +675,49 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const dropoffPulse = useRef(new Animated.Value(1)).current;
   const dropoffBgOpacity = useRef(new Animated.Value(0.5)).current;
+  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
+  // Start location tracking
+  useEffect(() => {
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setDriverLocation({
+          latitude: initialLocation.coords.latitude,
+          longitude: initialLocation.coords.longitude,
+        });
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,
+            distanceInterval: 10,
+          },
+          (location) => {
+            setDriverLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error('Error starting location tracking:', error);
+      }
+    };
+    startLocationTracking();
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -445,13 +726,24 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
         const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
-        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-        setRouteCoords(route);
+        // Route from driver location to dropoff
+        if (driverLocation) {
+          const route = await fetchRoute(
+            { lat: driverLocation.latitude, lng: driverLocation.longitude },
+            dropoff,
+            GOOGLE_MAPS_API_KEY
+          );
+          setRouteCoords(route);
+        } else {
+          // Fallback to pickup to dropoff
+          const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+          setRouteCoords(route);
+        }
       } catch (e) {
-        // handle error
+        console.error('Error fetching route:', e);
       }
     })();
-  }, [ride.pickupAddress, ride.dropoffAddress]);
+  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation]);
 
   useEffect(() => {
     if (routeCoords.length > 1 && mapRef.current) {
@@ -506,13 +798,33 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
         showsUserLocation
       >
         {pickupCoord && (
-          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+          <Marker 
+            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
+            title="Pickup"
+            pinColor="#00C853"
+          />
         )}
         {dropoffCoord && (
-          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+          <Marker 
+            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
+            title="Dropoff"
+            pinColor="#FF6B35"
+          />
         )}
         {routeCoords.length > 1 && (
-          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+          <MapPolyline 
+            coordinates={routeCoords} 
+            strokeWidth={4} 
+            strokeColor="#1877f2"
+            zIndex={1}
+          />
+        )}
+        {driverLocation && (
+          <Marker
+            coordinate={driverLocation}
+            title="You"
+            pinColor="#1877f2"
+          />
         )}
       </MapView>
       
@@ -726,6 +1038,8 @@ export default function HomeScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const [safetyModalVisible, setSafetyModalVisible] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [currentRideToCancel, setCurrentRideToCancel] = useState<RideRequest | null>(null);
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -1035,6 +1349,44 @@ export default function HomeScreen() {
         rating: 5,
       });
       navigation.navigate('EndRide', { ride: rideInProgress });
+    }
+  };
+
+  const handleCancelRide = (ride: RideRequest) => {
+    setCurrentRideToCancel(ride);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancelRide = (reason: string) => {
+    if (currentRideToCancel) {
+      // Add to ride history with cancellation reason
+      addRide({
+        id: currentRideToCancel.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: currentRideToCancel.pickupAddress || '',
+        to: currentRideToCancel.dropoffAddress || '',
+        driver: user?.fullName || 'You',
+        fare: Number(String(currentRideToCancel.price).replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'cancelled',
+        cancellationReason: reason,
+      });
+
+      // Close modals and reset state
+      setCancelModalVisible(false);
+      setCurrentRideToCancel(null);
+      
+      // Close navigation screen if it's open
+      if (navigationRide?.id === currentRideToCancel.id) {
+        setNavigationRide(null);
+      }
+      
+      // Close ride in progress if it's open
+      if (rideInProgress?.id === currentRideToCancel.id) {
+        setRideInProgress(null);
+      }
     }
   };
 
@@ -1710,25 +2062,12 @@ export default function HomeScreen() {
       {/* Navigation Screen */}
       {navigationRide && !showOtp && (
         <>
-          <NavigationScreen
-            ride={navigationRide}
-            onNavigate={handleNavigate}
-            onArrived={handleArrived}
-            onClose={() => setNavigationRide(null)}
-          />
-          {/* Cancel Ride Button - always visible above NavigationScreen */}
-          <View style={{ position: 'absolute', bottom: 120, left: 0, right: 0, alignItems: 'center', zIndex: 9999 }} pointerEvents="box-none">
-            <TouchableOpacity
-              style={{ backgroundColor: '#FF3B30', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 40, elevation: 6 }}
-              onPress={() => {
-                handleRejectRide();
-                setNavigationRide(null);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Cancel Ride</Text>
-            </TouchableOpacity>
-          </View>
+        <NavigationScreen
+          ride={navigationRide}
+          onNavigate={handleNavigate}
+          onArrived={handleArrived}
+            onClose={() => handleCancelRide(navigationRide)}
+        />
         </>
       )}
       {/* OTP Screen */}
@@ -1876,6 +2215,13 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+      
+      {/* Cancel Ride Modal */}
+      <CancelRideModal
+        visible={cancelModalVisible}
+        onClose={() => setCancelModalVisible(false)}
+        onConfirm={handleConfirmCancelRide}
+      />
     </SafeAreaView>
   );
 }

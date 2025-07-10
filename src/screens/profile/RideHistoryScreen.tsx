@@ -84,10 +84,17 @@ export default function RideHistoryScreen({ navigation }: any) {
           </View>
           
           <View style={styles.rideActions}>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color={Colors.accent} />
-              <Text style={styles.ratingText}>{item.rating}</Text>
-            </View>
+            {item.status === 'cancelled' ? (
+              <View style={styles.cancellationContainer}>
+                <Ionicons name="close-circle" size={14} color="#ff4444" />
+                <Text style={styles.cancellationText}>{item.cancellationReason}</Text>
+              </View>
+            ) : (
+              <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={14} color={Colors.accent} />
+                <Text style={styles.ratingText}>{item.rating}</Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -346,6 +353,23 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     fontWeight: '600',
     color: Colors.text,
+  },
+  cancellationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff5f5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffebee',
+  },
+  cancellationText: {
+    fontSize: Layout.fontSize.xs,
+    color: '#ff4444',
+    fontWeight: '500',
+    marginLeft: 4,
+    flex: 1,
   },
   rebookButton: {
     backgroundColor: Colors.primary,

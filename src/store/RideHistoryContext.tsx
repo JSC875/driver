@@ -14,6 +14,7 @@ export interface RideHistoryItem {
   duration: number;
   status: RideStatus;
   rating?: number;
+  cancellationReason?: string;
 }
 
 interface RideHistoryContextType {

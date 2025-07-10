@@ -96,7 +96,7 @@ export default function ProfileScreen() {
 
         <View style={styles.detailsCard}>
           <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.detailsTitle}>Personal Details</Text>
+          <Text style={styles.detailsTitle}>Personal Details</Text>
             <TouchableOpacity onPress={() => navigation.navigate('PersonalDetails')} style={{ padding: 8 }}>
               <Ionicons name="pencil" size={20} color={Colors.primary} />
             </TouchableOpacity>
