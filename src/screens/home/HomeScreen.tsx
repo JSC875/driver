@@ -1800,44 +1800,36 @@ export default function HomeScreen() {
           onPress={async () => {
             setIsLocating(true);
             try {
-              console.log('Checking if location services are enabled...');
-              const servicesEnabled = await Location.hasServicesEnabledAsync();
-              console.log('Location services enabled:', servicesEnabled);
-              if (!servicesEnabled) {
-                Alert.alert('Location Disabled', 'Please enable location services in your device settings.');
-                setIsLocating(false);
-                return;
+              // Try to get last known position instantly
+              let location = await Location.getLastKnownPositionAsync();
+              if (location && mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }, 1000);
               }
-              console.log('Requesting foreground permissions...');
-              let { status } = await Location.requestForegroundPermissionsAsync();
-              console.log('Permission status:', status);
-              if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Location permission is required to fetch your current location.');
-                setIsLocating(false);
-                return;
-              }
-              console.log('Fetching current position (Highest accuracy)...');
-              let location = null;
+              // Now fetch a fresh position in the background (Balanced accuracy)
+              let freshLocation = null;
               try {
-                location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-                console.log('Current location (Highest):', location.coords);
+                freshLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
               } catch (err1) {
-                console.log('Highest accuracy failed, trying Balanced accuracy...', err1);
+                // If Balanced fails, try Highest
                 try {
-                  location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-                  console.log('Current location (Balanced):', location.coords);
+                  freshLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
                 } catch (err2) {
-                  console.log('Balanced accuracy also failed:', err2);
+                  // Both failed, show error
                   const errMsg = (err2 && typeof err2 === 'object' && 'message' in err2) ? (err2 as Error).message : '';
                   Alert.alert('Error', `Failed to fetch current location. Try going outdoors or enabling location services. ${errMsg}`);
                   setTimeout(() => setIsLocating(false), 2000);
                   return;
                 }
               }
-              if (location && mapRef.current) {
+              if (freshLocation && mapRef.current) {
                 mapRef.current.animateToRegion({
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
+                  latitude: freshLocation.coords.latitude,
+                  longitude: freshLocation.coords.longitude,
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
                 }, 1000);
@@ -1851,7 +1843,7 @@ export default function HomeScreen() {
             }
           }}
         >
-          <Ionicons name="compass" size={32} color="#1877f2" />
+          <Ionicons name="navigate" size={32} color="#1877f2" />
         </TouchableOpacity>
       )}
       {/* Bottom Online/Offline Bar */}

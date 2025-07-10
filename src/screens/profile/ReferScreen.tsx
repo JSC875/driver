@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, Share, Dimensions } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
 export default function ReferScreen() {
   const { user } = useUser();
+  const navigation = useNavigation();
 
   // Get name (firstName + lastName or fullName fallback)
   let name = '';
@@ -39,6 +41,9 @@ export default function ReferScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={26} color="#1877f2" />
+      </TouchableOpacity>
       <View style={styles.inner}>
         <Text style={styles.title}>Refer & Earn</Text>
         <Text style={styles.description}>
@@ -73,6 +78,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 40,
+    left: 16,
+    zIndex: 10,
+    backgroundColor: '#f2f6fc',
+    borderRadius: 20,
+    padding: 6,
+    elevation: 2,
   },
   inner: {
     width: '90%',
