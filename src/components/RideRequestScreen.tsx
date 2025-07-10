@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   acceptButtonText: {
-    color: '#fff',
+    color: 'red',
     fontWeight: 'bold',
     fontSize: 22,
     letterSpacing: 1,

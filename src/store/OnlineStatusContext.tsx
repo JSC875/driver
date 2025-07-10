@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import socketManager from '../utils/socket';
+import socketManager, { 
+  RideRequestCallback, 
+  RideTakenCallback, 
+  RideResponseErrorCallback,
+  RideResponseConfirmedCallback 
+} from '../utils/socket';
+import { getDriverId, getUserType } from '../utils/jwtDecoder';
+import { useAuth } from '@clerk/clerk-expo';
 
 interface RideRequest {
   rideId: string;
@@ -8,6 +15,7 @@ interface RideRequest {
   rideType: string;
   price: number;
   userId: string;
+  timestamp?: number;
 }
 
 const OnlineStatusContext = createContext<{
@@ -17,8 +25,12 @@ const OnlineStatusContext = createContext<{
   currentRideRequest: RideRequest | null;
   acceptRide: (rideRequest: RideRequest) => void;
   rejectRide: (rideRequest: RideRequest) => void;
-  sendLocationUpdate: (data: { latitude: number; longitude: number; userId: string; rideId: string }) => void;
+  sendLocationUpdate: (data: { latitude: number; longitude: number; userId: string; driverId: string }) => void;
   sendRideStatusUpdate: (data: { rideId: string; status: 'accepted' | 'rejected' | 'arrived' | 'started' | 'completed' | 'cancelled'; userId: string; message?: string }) => void;
+  sendDriverStatus: (data: { driverId: string; status: 'online' | 'busy' | 'offline' }) => void;
+  connectionStatus: string;
+  driverId: string;
+  userType: string;
 }>({
   isOnline: false,
   setIsOnline: () => {},
@@ -28,66 +40,146 @@ const OnlineStatusContext = createContext<{
   rejectRide: () => {},
   sendLocationUpdate: () => {},
   sendRideStatusUpdate: () => {},
+  sendDriverStatus: () => {},
+  connectionStatus: 'Disconnected',
+  driverId: 'driver_001',
+  userType: 'driver',
 });
 
 export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOnline, setIsOnline] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [currentRideRequest, setCurrentRideRequest] = useState<RideRequest | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState('Disconnected');
+  const [driverId, setDriverId] = useState('driver_001');
+  const [userType, setUserType] = useState('driver');
+  const { getToken } = useAuth();
+
+  // Get driver ID and user type from JWT when component mounts
+  useEffect(() => {
+    const initializeUserInfo = async () => {
+      try {
+        const [newDriverId, newUserType] = await Promise.all([
+          getDriverId(getToken),
+          getUserType(getToken)
+        ]);
+        
+        setDriverId(newDriverId);
+        setUserType(newUserType);
+        
+        console.log('✅ User info initialized from JWT:', {
+          driverId: newDriverId,
+          userType: newUserType
+        });
+      } catch (error) {
+        console.error('❌ Error initializing user info from JWT:', error);
+      }
+    };
+
+    initializeUserInfo();
+  }, [getToken]);
 
   useEffect(() => {
     // Set up socket connection when online status changes
     if (isOnline) {
-      // Connect to socket with a driver ID (you can make this dynamic)
-      const driverId = 'driver_001'; // This should come from user authentication
+      // Connect to socket with the real driver ID from JWT
+      console.log('🔗 Connecting to socket with driver ID:', driverId);
       socketManager.connect(driverId);
       
       // Set up socket event listeners
       socketManager.onConnectionChange((connected) => {
         console.log('Socket connection status:', connected);
         setIsSocketConnected(connected);
+        setConnectionStatus(connected ? 'Connected' : 'Disconnected');
       });
 
       socketManager.onRideRequest((data) => {
-        console.log('New ride request received in context:', data);
+        console.log('🚗 New ride request received in context:', data);
         setCurrentRideRequest(data);
+      });
+
+      socketManager.onRideTaken((data) => {
+        console.log('✅ Ride taken by another driver:', data);
+        if (currentRideRequest?.rideId === data.rideId) {
+          setCurrentRideRequest(null);
+        }
+      });
+
+      socketManager.onRideResponseError((data) => {
+        console.log('❌ Ride response error:', data);
+        // Could show an alert or notification here
+      });
+
+      socketManager.onRideResponseConfirmed((data) => {
+        console.log('✅ Ride response confirmed:', data);
+        if (data.response === 'rejected') {
+          setCurrentRideRequest(null);
+        }
+      });
+
+      // Send driver status when going online
+      socketManager.sendDriverStatus({
+        driverId,
+        status: 'online'
       });
     } else {
       // Disconnect from socket when going offline
+      socketManager.sendDriverStatus({
+        driverId,
+        status: 'offline'
+      });
       socketManager.disconnect();
       setIsSocketConnected(false);
+      setConnectionStatus('Disconnected');
       setCurrentRideRequest(null);
     }
-  }, [isOnline]);
+  }, [isOnline, driverId]);
 
   const acceptRide = (rideRequest: RideRequest) => {
-    console.log('Accepting ride:', rideRequest);
-    socketManager.sendRideStatusUpdate({
+    console.log('✅ Accepting ride:', rideRequest);
+    
+    socketManager.acceptRide({
       rideId: rideRequest.rideId,
-      status: 'accepted',
-      userId: rideRequest.userId,
-      message: 'Driver accepted the ride'
+      driverId: driverId, // Use real driver ID from JWT
+      driverName: 'Driver Name', // This should come from user data
+      driverPhone: '+1234567890',
+      estimatedArrival: '5 minutes'
     });
+    
     setCurrentRideRequest(null);
   };
 
   const rejectRide = (rideRequest: RideRequest) => {
-    console.log('Rejecting ride:', rideRequest);
-    socketManager.sendRideStatusUpdate({
+    console.log('❌ Rejecting ride:', rideRequest);
+    
+    socketManager.rejectRide({
       rideId: rideRequest.rideId,
-      status: 'rejected',
-      userId: rideRequest.userId,
-      message: 'Driver rejected the ride'
+      driverId: driverId // Use real driver ID from JWT
     });
+    
     setCurrentRideRequest(null);
   };
 
-  const sendLocationUpdate = (data: { latitude: number; longitude: number; userId: string; rideId: string }) => {
-    socketManager.sendLocationUpdate(data);
+  const sendLocationUpdate = (data: { latitude: number; longitude: number; userId: string; driverId: string }) => {
+    // Use the real driver ID from JWT
+    const locationData = {
+      ...data,
+      driverId: driverId
+    };
+    socketManager.sendLocationUpdate(locationData);
   };
 
   const sendRideStatusUpdate = (data: { rideId: string; status: 'accepted' | 'rejected' | 'arrived' | 'started' | 'completed' | 'cancelled'; userId: string; message?: string }) => {
     socketManager.sendRideStatusUpdate(data);
+  };
+
+  const sendDriverStatus = (data: { driverId: string; status: 'online' | 'busy' | 'offline' }) => {
+    // Use the real driver ID from JWT
+    const statusData = {
+      ...data,
+      driverId: driverId
+    };
+    socketManager.sendDriverStatus(statusData);
   };
 
   return (
@@ -99,7 +191,11 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       acceptRide,
       rejectRide,
       sendLocationUpdate,
-      sendRideStatusUpdate
+      sendRideStatusUpdate,
+      sendDriverStatus,
+      connectionStatus,
+      driverId,
+      userType
     }}>
       {children}
     </OnlineStatusContext.Provider>

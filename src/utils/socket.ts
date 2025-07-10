@@ -1,4 +1,30 @@
 import { io, Socket } from 'socket.io-client';
+import { Alert } from 'react-native'; // Added for user-friendly alerts
+
+// Event callback types
+export type RideRequestCallback = (data: {
+  rideId: string;
+  pickup: string;
+  drop: string;
+  rideType: string;
+  price: number;
+  userId: string;
+  timestamp: number;
+}) => void;
+
+export type RideTakenCallback = (data: {
+  rideId: string;
+  driverId: string;
+}) => void;
+
+export type RideResponseErrorCallback = (data: {
+  message: string;
+}) => void;
+
+export type RideResponseConfirmedCallback = (data: {
+  rideId: string;
+  response: string;
+}) => void;
 
 class SocketManager {
   private socket: Socket | null = null;
@@ -8,7 +34,10 @@ class SocketManager {
   private reconnectDelay = 1000;
 
   // Event callbacks
-  private onRideRequestCallback: ((data: any) => void) | null = null;
+  private onRideRequestCallback: RideRequestCallback | null = null;
+  private onRideTakenCallback: RideTakenCallback | null = null;
+  private onRideResponseErrorCallback: RideResponseErrorCallback | null = null;
+  private onRideResponseConfirmedCallback: RideResponseConfirmedCallback | null = null;
   private onConnectionChangeCallback: ((connected: boolean) => void) | null = null;
 
   connect(driverId: string) {
@@ -43,26 +72,11 @@ class SocketManager {
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.onConnectionChangeCallback?.(true);
-
-      // Emit a driver_location event for testing
-      this.sendLocationUpdate({
-        latitude: 17.4485835,
-        longitude: 78.39080349999999,
-        userId: 'user123', // Use a test userId
-        rideId: 'ride_001' // Use a test rideId
-      });
-
-      // Emit a ride_status_update event for testing
-      this.sendRideStatusUpdate({
-        rideId: 'ride_001',
-        status: 'arrived',
-        userId: 'user123',
-        message: 'Driver has arrived (test event)'
-      });
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('🔴 Driver disconnected from socket server:', reason);
+      Alert.alert('Disconnected', 'Lost connection to server. Please check your internet.');
       this.isConnected = false;
       this.onConnectionChangeCallback?.(false);
       
@@ -78,6 +92,7 @@ class SocketManager {
 
     this.socket.on('connect_error', (error) => {
       console.error('❌ Socket connection error:', error);
+      Alert.alert('Connection Error', 'Could not connect to server.');
       this.isConnected = false;
       this.onConnectionChangeCallback?.(false);
     });
@@ -86,6 +101,25 @@ class SocketManager {
     this.socket.on('new_ride_request', (data) => {
       console.log('🚗 New ride request received:', data);
       this.onRideRequestCallback?.(data);
+    });
+
+    // Handle ride taken notifications
+    this.socket.on('ride_taken', (data) => {
+      console.log('✅ Ride taken by another driver:', data);
+      this.onRideTakenCallback?.(data);
+    });
+
+    // Handle ride response errors
+    this.socket.on('ride_response_error', (data) => {
+      console.log('❌ Ride response error:', data);
+      Alert.alert('Ride Error', data.message || 'Ride could not be accepted.');
+      this.onRideResponseErrorCallback?.(data);
+    });
+
+    // Handle ride response confirmations
+    this.socket.on('ride_response_confirmed', (data) => {
+      console.log('✅ Ride response confirmed:', data);
+      this.onRideResponseConfirmedCallback?.(data);
     });
 
     // Handle test responses
@@ -102,12 +136,52 @@ class SocketManager {
     }
   }
 
+  // Accept a ride request
+  acceptRide(data: {
+    rideId: string;
+    driverId: string;
+    driverName: string;
+    driverPhone: string;
+    estimatedArrival: string;
+  }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('ride_response', {
+        rideId: data.rideId,
+        response: 'accept',
+        driverId: data.driverId,
+        driverName: data.driverName,
+        driverPhone: data.driverPhone,
+        estimatedArrival: data.estimatedArrival
+      });
+      console.log('✅ Accepting ride:', data.rideId);
+    } else {
+      console.warn('Socket not connected, cannot accept ride');
+    }
+  }
+
+  // Reject a ride request
+  rejectRide(data: {
+    rideId: string;
+    driverId: string;
+  }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('ride_response', {
+        rideId: data.rideId,
+        response: 'reject',
+        driverId: data.driverId
+      });
+      console.log('❌ Rejecting ride:', data.rideId);
+    } else {
+      console.warn('Socket not connected, cannot reject ride');
+    }
+  }
+
   // Send driver location update
   sendLocationUpdate(data: {
     latitude: number;
     longitude: number;
     userId: string;
-    rideId: string;
+    driverId: string;
   }) {
     if (this.socket && this.isConnected) {
       this.socket.emit('driver_location', data);
@@ -126,6 +200,16 @@ class SocketManager {
     }
   }
 
+  // Send driver status update
+  sendDriverStatus(data: {
+    driverId: string;
+    status: 'online' | 'busy' | 'offline';
+  }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('driver_status', data);
+    }
+  }
+
   // Send test event
   sendTestEvent(data: any) {
     if (this.socket && this.isConnected) {
@@ -134,8 +218,20 @@ class SocketManager {
   }
 
   // Set callbacks
-  onRideRequest(callback: (data: any) => void) {
+  onRideRequest(callback: RideRequestCallback) {
     this.onRideRequestCallback = callback;
+  }
+
+  onRideTaken(callback: RideTakenCallback) {
+    this.onRideTakenCallback = callback;
+  }
+
+  onRideResponseError(callback: RideResponseErrorCallback) {
+    this.onRideResponseErrorCallback = callback;
+  }
+
+  onRideResponseConfirmed(callback: RideResponseConfirmedCallback) {
+    this.onRideResponseConfirmedCallback = callback;
   }
 
   onConnectionChange(callback: (connected: boolean) => void) {
@@ -145,6 +241,15 @@ class SocketManager {
   // Get connection status
   getConnectionStatus() {
     return this.isConnected;
+  }
+
+  // Clear all callbacks
+  clearCallbacks() {
+    this.onRideRequestCallback = null;
+    this.onRideTakenCallback = null;
+    this.onRideResponseErrorCallback = null;
+    this.onRideResponseConfirmedCallback = null;
+    this.onConnectionChangeCallback = null;
   }
 }
 
