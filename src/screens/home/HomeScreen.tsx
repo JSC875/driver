@@ -228,7 +228,8 @@ async function geocodeAddress(address: string, apiKey: string) {
     throw new Error('No geocoding results found');
   } catch (error) {
     console.error('Geocoding error:', error);
-    throw new Error('Geocoding failed: ' + error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error('Geocoding failed: ' + errorMessage);
   }
 }
 
@@ -261,7 +262,8 @@ async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, ln
     throw new Error('No routes found');
   } catch (error) {
     console.error('Directions fetch error:', error);
-    throw new Error('Directions fetch failed: ' + error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error('Directions fetch failed: ' + errorMessage);
   }
 }
 
@@ -342,11 +344,30 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
   useEffect(() => {
     (async () => {
       try {
-        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
-        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        let pickup;
+        if (
+          ride.pickupAddress === 'Default Current Location' &&
+          ride.pickupDetails &&
+          typeof ride.pickupDetails.latitude === 'number' &&
+          typeof ride.pickupDetails.longitude === 'number'
+        ) {
+          pickup = { lat: ride.pickupDetails.latitude, lng: ride.pickupDetails.longitude };
+        } else {
+          pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
+        }
+        let dropoff;
+        if (
+          ride.dropoffAddress === 'Default Current Location' &&
+          ride.dropoffDetails &&
+          typeof ride.dropoffDetails.latitude === 'number' &&
+          typeof ride.dropoffDetails.longitude === 'number'
+        ) {
+          dropoff = { lat: ride.dropoffDetails.latitude, lng: ride.dropoffDetails.longitude };
+        } else {
+          dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        }
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
-        
         // Wait for location to be ready before calculating route
         if (isLocationReady) {
           // Always prioritize driver location to pickup route
@@ -368,10 +389,8 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         // Use fallback coordinates when geocoding fails
         const fallbackPickup = getFallbackCoordinates(ride.pickupAddress);
         const fallbackDropoff = getFallbackCoordinates(ride.dropoffAddress);
-        
         setPickupCoord(fallbackPickup);
         setDropoffCoord(fallbackDropoff);
-        
         console.log('Using fallback coordinates due to geocoding error');
         // Don't let geocoding errors prevent the ride acceptance
         // Just show a basic map without route
@@ -787,8 +806,28 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
   useEffect(() => {
     (async () => {
       try {
-        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
-        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        let pickup;
+        if (
+          ride.pickupAddress === 'Default Current Location' &&
+          ride.pickupDetails &&
+          typeof ride.pickupDetails.latitude === 'number' &&
+          typeof ride.pickupDetails.longitude === 'number'
+        ) {
+          pickup = { lat: ride.pickupDetails.latitude, lng: ride.pickupDetails.longitude };
+        } else {
+          pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
+        }
+        let dropoff;
+        if (
+          ride.dropoffAddress === 'Default Current Location' &&
+          ride.dropoffDetails &&
+          typeof ride.dropoffDetails.latitude === 'number' &&
+          typeof ride.dropoffDetails.longitude === 'number'
+        ) {
+          dropoff = { lat: ride.dropoffDetails.latitude, lng: ride.dropoffDetails.longitude };
+        } else {
+          dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
+        }
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
         // Route from driver location to dropoff
@@ -1084,6 +1123,7 @@ export default function HomeScreen() {
     setIsOnline, 
     isSocketConnected, 
     currentRideRequest, 
+    acceptedRideDetails, // <-- ADD THIS
     acceptRide, 
     rejectRide,
     sendLocationUpdate,
@@ -1617,6 +1657,27 @@ export default function HomeScreen() {
     }
   };
 
+  useEffect(() => {
+    if (acceptedRideDetails) {
+      // Convert acceptedRideDetails to local RideRequest format
+      const localRideRequest: RideRequest = {
+        id: acceptedRideDetails.rideId,
+        price: `₹${acceptedRideDetails.price}`,
+        type: acceptedRideDetails.rideType || 'Mini',
+        tag: 'Hyderabad',
+        rating: '4.95',
+        verified: true,
+        pickup: '5 min (2.1 km) away',
+        pickupAddress: acceptedRideDetails.pickup.address || acceptedRideDetails.pickup.name || 'Pickup Location',
+        dropoff: '25 min (12.3 km) trip',
+        dropoffAddress: acceptedRideDetails.drop.address || acceptedRideDetails.drop.name || 'Drop Location',
+        pickupDetails: acceptedRideDetails.pickup,
+        dropoffDetails: acceptedRideDetails.drop,
+      };
+      setNavigationRide(localRideRequest);
+    }
+  }, [acceptedRideDetails]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
       {/* StatusBar background fix for edge-to-edge */}
@@ -1997,7 +2058,7 @@ export default function HomeScreen() {
                 }, 1000);
                 
                 // Send location update to socket server if online
-                if (isOnline && isSocketConnected) {
+                if (isOnline && isSocketConnected && location) {
                   sendLocationUpdate({
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
