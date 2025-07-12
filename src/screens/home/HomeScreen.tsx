@@ -1370,8 +1370,8 @@ export default function HomeScreen() {
         id: currentRideRequest.rideId + '-' + Date.now(),
         date: new Date().toISOString().slice(0, 10),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: currentRideRequest.pickup,
-        to: currentRideRequest.drop,
+        from: currentRideRequest.pickup.address || currentRideRequest.pickup.name,
+        to: currentRideRequest.drop.address || currentRideRequest.drop.name,
         driver: user?.fullName || 'You',
         fare: Number(String(currentRideRequest.price).replace(/[^\d.]/g, '')) || 0,
         distance: 0,
@@ -1388,7 +1388,13 @@ export default function HomeScreen() {
 
   const handleNavigate = () => {
     if (navigationRide) {
-      const address = encodeURIComponent(navigationRide.pickupAddress);
+      // Use detailed location if available, otherwise fall back to address
+      const pickupLocation = navigationRide.pickupDetails;
+      const address = encodeURIComponent(
+        pickupLocation?.address || 
+        pickupLocation?.name || 
+        navigationRide.pickupAddress
+      );
       const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
       Linking.openURL(url);
     }
@@ -1427,7 +1433,13 @@ export default function HomeScreen() {
 
   const handleNavigateToDropoff = () => {
     if (rideInProgress) {
-      const address = encodeURIComponent(rideInProgress.dropoffAddress);
+      // Use detailed location if available, otherwise fall back to address
+      const dropoffLocation = rideInProgress.dropoffDetails;
+      const address = encodeURIComponent(
+        dropoffLocation?.address || 
+        dropoffLocation?.name || 
+        rideInProgress.dropoffAddress
+      );
       const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
       Linking.openURL(url);
     }
@@ -1534,9 +1546,12 @@ export default function HomeScreen() {
         rating: '4.95',
         verified: true,
         pickup: '5 min (2.1 km) away',
-        pickupAddress: hasAddress(currentRideRequest.pickup) ? currentRideRequest.pickup.address : currentRideRequest.pickup,
+        pickupAddress: currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location',
         dropoff: '25 min (12.3 km) trip',
-        dropoffAddress: hasAddress(currentRideRequest.drop) ? currentRideRequest.drop.address : currentRideRequest.drop,
+        dropoffAddress: currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location',
+        // Store detailed location information for navigation
+        pickupDetails: currentRideRequest.pickup,
+        dropoffDetails: currentRideRequest.drop,
       };
       
       setRideRequest(localRideRequest);

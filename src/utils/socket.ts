@@ -4,8 +4,20 @@ import { Alert } from 'react-native'; // Added for user-friendly alerts
 // Event callback types
 export type RideRequestCallback = (data: {
   rideId: string;
-  pickup: string;
-  drop: string;
+  pickup: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    name: string;
+  };
+  drop: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  };
   rideType: string;
   price: number;
   userId: string;
@@ -29,8 +41,20 @@ export type RideResponseConfirmedCallback = (data: {
 export type RideAcceptedWithDetailsCallback = (data: {
   rideId: string;
   userId: string;
-  pickup: string;
-  drop: string;
+  pickup: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    name: string;
+  };
+  drop: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  };
   rideType: string;
   price: number;
   driverId: string;

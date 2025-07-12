@@ -17,6 +17,21 @@ export type RideRequest = {
   pickupAddress: string;
   dropoff: string;
   dropoffAddress: string;
+  // Optional detailed location information for socket data
+  pickupDetails?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    name: string;
+  };
+  dropoffDetails?: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  };
 };
 
 const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void }) => {

@@ -11,19 +11,43 @@ import { useAuth } from '@clerk/clerk-expo';
 
 interface RideRequest {
   rideId: string;
-  pickup: string;
-  drop: string;
+  pickup: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    name: string;
+  };
+  drop: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  };
   rideType: string;
   price: number;
   userId: string;
-  timestamp?: number;
+  timestamp: number;
 }
 
 interface AcceptedRideDetails {
   rideId: string;
   userId: string;
-  pickup: string;
-  drop: string;
+  pickup: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    name: string;
+  };
+  drop: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  };
   rideType: string;
   price: number;
   driverId: string;
