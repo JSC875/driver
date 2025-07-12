@@ -3,7 +3,8 @@ import socketManager, {
   RideRequestCallback, 
   RideTakenCallback, 
   RideResponseErrorCallback,
-  RideResponseConfirmedCallback 
+  RideResponseConfirmedCallback,
+  RideAcceptedWithDetailsCallback
 } from '../utils/socket';
 import { getDriverId, getUserType } from '../utils/jwtDecoder';
 import { useAuth } from '@clerk/clerk-expo';
@@ -18,11 +19,27 @@ interface RideRequest {
   timestamp?: number;
 }
 
+interface AcceptedRideDetails {
+  rideId: string;
+  userId: string;
+  pickup: string;
+  drop: string;
+  rideType: string;
+  price: number;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  estimatedArrival: string;
+  status: string;
+  createdAt: number;
+}
+
 const OnlineStatusContext = createContext<{
   isOnline: boolean;
   setIsOnline: (v: boolean) => void;
   isSocketConnected: boolean;
   currentRideRequest: RideRequest | null;
+  acceptedRideDetails: AcceptedRideDetails | null;
   acceptRide: (rideRequest: RideRequest) => void;
   rejectRide: (rideRequest: RideRequest) => void;
   sendLocationUpdate: (data: { latitude: number; longitude: number; userId: string; driverId: string }) => void;
@@ -36,6 +53,7 @@ const OnlineStatusContext = createContext<{
   setIsOnline: () => {},
   isSocketConnected: false,
   currentRideRequest: null,
+  acceptedRideDetails: null,
   acceptRide: () => {},
   rejectRide: () => {},
   sendLocationUpdate: () => {},
@@ -50,6 +68,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isOnline, setIsOnline] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [currentRideRequest, setCurrentRideRequest] = useState<RideRequest | null>(null);
+  const [acceptedRideDetails, setAcceptedRideDetails] = useState<AcceptedRideDetails | null>(null);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [driverId, setDriverId] = useState('driver_001');
   const [userType, setUserType] = useState('driver');
@@ -115,6 +134,12 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (data.response === 'rejected') {
           setCurrentRideRequest(null);
         }
+      });
+
+      socketManager.onRideAcceptedWithDetails((data) => {
+        console.log('✅ Ride accepted with details:', data);
+        setAcceptedRideDetails(data);
+        setCurrentRideRequest(null);
       });
 
       // Send driver status when going online
@@ -188,6 +213,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setIsOnline, 
       isSocketConnected, 
       currentRideRequest,
+      acceptedRideDetails,
       acceptRide,
       rejectRide,
       sendLocationUpdate,

@@ -26,6 +26,21 @@ export type RideResponseConfirmedCallback = (data: {
   response: string;
 }) => void;
 
+export type RideAcceptedWithDetailsCallback = (data: {
+  rideId: string;
+  userId: string;
+  pickup: string;
+  drop: string;
+  rideType: string;
+  price: number;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  estimatedArrival: string;
+  status: string;
+  createdAt: number;
+}) => void;
+
 class SocketManager {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -38,6 +53,7 @@ class SocketManager {
   private onRideTakenCallback: RideTakenCallback | null = null;
   private onRideResponseErrorCallback: RideResponseErrorCallback | null = null;
   private onRideResponseConfirmedCallback: RideResponseConfirmedCallback | null = null;
+  private onRideAcceptedWithDetailsCallback: RideAcceptedWithDetailsCallback | null = null;
   private onConnectionChangeCallback: ((connected: boolean) => void) | null = null;
 
   connect(driverId: string) {
@@ -120,6 +136,12 @@ class SocketManager {
     this.socket.on('ride_response_confirmed', (data) => {
       console.log('✅ Ride response confirmed:', data);
       this.onRideResponseConfirmedCallback?.(data);
+    });
+
+    // Handle ride accepted with details
+    this.socket.on('ride_accepted_with_details', (data) => {
+      console.log('✅ Ride accepted with details:', data);
+      this.onRideAcceptedWithDetailsCallback?.(data);
     });
 
     // Handle test responses
@@ -234,6 +256,10 @@ class SocketManager {
     this.onRideResponseConfirmedCallback = callback;
   }
 
+  onRideAcceptedWithDetails(callback: RideAcceptedWithDetailsCallback) {
+    this.onRideAcceptedWithDetailsCallback = callback;
+  }
+
   onConnectionChange(callback: (connected: boolean) => void) {
     this.onConnectionChangeCallback = callback;
   }
@@ -249,6 +275,7 @@ class SocketManager {
     this.onRideTakenCallback = null;
     this.onRideResponseErrorCallback = null;
     this.onRideResponseConfirmedCallback = null;
+    this.onRideAcceptedWithDetailsCallback = null;
     this.onConnectionChangeCallback = null;
   }
 }
