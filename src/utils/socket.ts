@@ -275,6 +275,17 @@ class SocketManager {
     this.socket.on('test_response', (data) => {
       console.log('🧪 Test response received:', data);
     });
+
+    // Handle driver cancellation responses
+    this.socket.on('driver_cancellation_success', (data) => {
+      console.log('✅ Driver cancellation successful:', data);
+      Alert.alert('Ride Cancelled', data.message || 'Ride cancelled successfully');
+    });
+
+    this.socket.on('driver_cancellation_error', (data) => {
+      console.log('❌ Driver cancellation failed:', data);
+      Alert.alert('Cancellation Error', data.message || 'Failed to cancel ride');
+    });
   }
 
   disconnect() {
@@ -393,6 +404,16 @@ class SocketManager {
       console.log('✅ Completing ride:', data);
     } else {
       console.warn('⚠️ Socket not connected, cannot complete ride');
+    }
+  }
+
+  // Cancel a ride (driver-initiated)
+  cancelRide(data: { rideId: string; driverId: string; reason: string }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit('driver_cancel_ride', data);
+      console.log('🚫 Driver cancelling ride:', data);
+    } else {
+      console.warn('⚠️ Socket not connected, cannot cancel ride');
     }
   }
 

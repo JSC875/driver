@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Animated, SafeAreaView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import socketManager from '../../utils/socket';
 
 interface OtpScreenProps {
   route: any;
@@ -66,7 +67,6 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
       console.log('🔐 Driver entered OTP:', enteredOtp);
       
       // Send OTP to server for verification
-      const socketManager = require('../../utils/socket').default;
       socketManager.sendOtp({
         rideId: ride.rideId,
         driverId: ride.driverId,
@@ -80,6 +80,38 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
       setSubmitted(false);
       checkAnim.setValue(0);
     });
+  };
+
+  // Function to cancel the ride
+  const handleCancelRide = () => {
+    Alert.alert(
+      'Cancel Ride',
+      'Are you sure you want to cancel this ride? This action cannot be undone.',
+      [
+        { text: 'Keep Ride', style: 'cancel' },
+        { 
+          text: 'Cancel Ride', 
+          style: 'destructive',
+          onPress: () => {
+            console.log('🚫 Driver cancelling ride during OTP entry:', {
+              rideId: ride.rideId,
+              driverId: ride.driverId,
+              reason: 'Driver cancelled during OTP entry'
+            });
+            
+            // Send cancellation to server
+            socketManager.cancelRide({
+              rideId: ride.rideId,
+              driverId: ride.driverId,
+              reason: 'Driver cancelled during OTP entry'
+            });
+            
+            // Navigate back to home
+            navigation.navigate('Home');
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -97,7 +129,7 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         alignItems: 'center',
         transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }],
       }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
+        <TouchableOpacity onPress={handleCancelRide} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
         </TouchableOpacity>
         <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: '#1877f2', letterSpacing: 1 }}>Enter OTP</Text>
@@ -135,12 +167,19 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
           ))}
         </View>
         <TouchableOpacity
-          style={{ backgroundColor: otp.every(d => d) ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 8 }}
+          style={{ backgroundColor: otp.every(d => d) ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12 }}
           onPress={handleSubmit}
           disabled={!otp.every(d => d)}
           activeOpacity={otp.every(d => d) ? 0.8 : 1}
         >
           <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>Submit OTP</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: '#ff4444', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
+          onPress={handleCancelRide}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Cancel Ride</Text>
         </TouchableOpacity>
         {submitted && (
           <Animated.View style={{ marginTop: 18, opacity: checkAnim, transform: [{ scale: checkAnim }] }}>

@@ -667,6 +667,23 @@ export default function HomeScreen() {
 
   const handleConfirmCancelRide = (reason: string) => {
     if (currentRideToCancel) {
+      // Get the current ride details from acceptedRideDetails or rideRequest
+      const rideToCancel = acceptedRideDetails || currentRideRequest;
+      
+      if (rideToCancel) {
+        // Cancel ride via socket
+        socketManager.cancelRide({
+          rideId: rideToCancel.rideId,
+          driverId: user?.id || 'driver123',
+          reason: reason
+        });
+        
+        console.log('🚫 Driver cancelling ride:', {
+          rideId: rideToCancel.rideId,
+          reason: reason
+        });
+      }
+
       // Add to ride history with cancellation reason
       addRide({
         id: currentRideToCancel.id + '-' + Date.now(),
@@ -682,14 +699,11 @@ export default function HomeScreen() {
         cancellationReason: reason,
       });
 
-      // Reset driver status when ride is cancelled
-      resetDriverStatus();
-
       // Close modals and reset state
       setCancelModalVisible(false);
       setCurrentRideToCancel(null);
       
-      // Navigate back to home instead of managing local state
+      // Navigate back to home
       navigation.navigate('Home');
     }
   };

@@ -180,6 +180,38 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
     }).start();
   }, []);
 
+  // Function to cancel the ride
+  const handleCancelRide = () => {
+    Alert.alert(
+      'Cancel Ride',
+      'Are you sure you want to cancel this ride? This action cannot be undone.',
+      [
+        { text: 'Keep Ride', style: 'cancel' },
+        { 
+          text: 'Cancel Ride', 
+          style: 'destructive',
+          onPress: () => {
+            console.log('🚫 Driver cancelling ride during ride in progress:', {
+              rideId: ride.rideId,
+              driverId: ride.driverId,
+              reason: 'Driver cancelled during ride in progress'
+            });
+            
+            // Send cancellation to server
+            socketManager.cancelRide({
+              rideId: ride.rideId,
+              driverId: ride.driverId,
+              reason: 'Driver cancelled during ride in progress'
+            });
+            
+            // Navigate back to home
+            navigation.navigate('Home');
+          }
+        }
+      ]
+    );
+  };
+
   // Listen for ride completed event from server
   useEffect(() => {
     const handleRideCompleted = (data: { rideId: string; status: string; message: string; timestamp: number }) => {
@@ -285,10 +317,19 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
         shadowOffset: { width: 0, height: 4 },
         elevation: 6,
       }}>
-        {/* Route Header */}
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
-          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
+        {/* Route Header with Cancel Button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
+            <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
+          </View>
+          <TouchableOpacity
+            style={{ backgroundColor: '#ff4444', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}
+            onPress={handleCancelRide}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Cancel</Text>
+          </TouchableOpacity>
         </View>
         {/* Route Information */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -380,6 +421,28 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
           >
             <Ionicons name="stop-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>End Ride</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#ff4444', 
+              borderRadius: 16, 
+              paddingVertical: 16, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#ff4444',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={handleCancelRide}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Cancel Ride</Text>
           </TouchableOpacity>
         </View>
       </View>
