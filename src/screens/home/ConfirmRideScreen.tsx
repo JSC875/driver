@@ -15,12 +15,16 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import { mockDrivers } from '../../data/mockData';
+import * as Location from 'expo-location';
+import socketManager from '../../utils/socket';
 
 export default function ConfirmRideScreen({ navigation, route }: any) {
   const { destination, estimate, paymentMethod } = route.params;
   const [selectedDriver] = useState(mockDrivers[0]);
 
-  const handleBookRide = () => {
+  const handleBookRide = async () => {
+    // This is a driver app - drivers don't book rides, they accept them
+    // Navigate to FindingDriver screen to show available rides
     navigation.navigate('FindingDriver', {
       destination,
       estimate,
@@ -144,7 +148,7 @@ export default function ConfirmRideScreen({ navigation, route }: any) {
               <TouchableOpacity
                 style={styles.safetyFeature}
                 onPress={() => {
-                  Linking.openURL(`tel:${emergencyPhone}`);
+                  Linking.openURL('tel:112'); // Placeholder emergency number
                 }}
               >
                 <Ionicons name="call" size={20} color={Colors.success} />

@@ -14,6 +14,11 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
+import HomeScreen from '../home/HomeScreen';
+
+function goToHome(navigation: any) {
+  navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+}
 
 const feedbackTags = [
   'Great ride',
@@ -26,7 +31,10 @@ const feedbackTags = [
 
 export default function RideSummaryScreen({ navigation, route }: any) {
   const { destination, estimate, driver } = route.params;
-  const { setIsOnline } = useOnlineStatus();
+  const { setIsOnline, resetDriverStatus } = useOnlineStatus();
+  // Add these hooks to clear ride state
+  const [_, setRideInProgress] = React.useState(null);
+  const [__, setNavigationRide] = React.useState(null);
   const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tip, setTip] = useState(0);
@@ -48,9 +56,12 @@ export default function RideSummaryScreen({ navigation, route }: any) {
   };
 
   const handleSubmitFeedback = () => {
-    // Set driver online before navigating home
+    // Reset driver status to available
+    resetDriverStatus();
     setIsOnline(true);
-    navigation.navigate('Home');
+    setRideInProgress(null);
+    setNavigationRide(null);
+    goToHome(navigation);
   };
 
   const handleBookAnother = () => {

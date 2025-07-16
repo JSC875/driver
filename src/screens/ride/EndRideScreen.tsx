@@ -90,28 +90,38 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
   ).current;
 
   const handleEndRide = () => {
-    // Here you would typically call your API to end the ride
+    // Call the completeRide function to notify the server
     console.log('Ending ride:', ride);
     
-    // Navigate back to home or show ride summary
-    setTimeout(() => {
-      // Create the expected data structure for RideSummary
-      const summaryData = {
-        destination: { name: ride?.dropoffAddress || 'Destination' },
-        estimate: { 
-          distance: '5 km', 
-          duration: '15 min', 
-          fare: ride?.price || '100' 
-        },
-        driver: { 
-          name: 'Driver Name', 
-          photo: 'https://via.placeholder.com/60',
-          vehicleModel: 'Vehicle Model',
-          vehicleNumber: 'Vehicle Number'
-        }
-      };
-      navigation.navigate('RideSummary', summaryData);
-    }, 500);
+    if (ride?.rideId && ride?.driverId) {
+      // Import and use the socket manager to complete the ride
+      const socketManager = require('../../utils/socket').default;
+      socketManager.completeRide({
+        rideId: ride.rideId,
+        driverId: ride.driverId
+      });
+      
+      console.log('✅ Ride completion request sent to server');
+    } else {
+      console.error('❌ Missing rideId or driverId for ride completion');
+    }
+    
+    // Navigate to RideSummaryScreen for feedback
+    const summaryData = {
+      destination: { name: ride?.dropoffAddress || 'Destination' },
+      estimate: {
+        distance: '5 km',
+        duration: '15 min',
+        fare: ride?.price || '100'
+      },
+      driver: {
+        name: 'Driver Name',
+        photo: 'https://via.placeholder.com/60',
+        vehicleModel: 'Vehicle Model',
+        vehicleNumber: 'Vehicle Number'
+      }
+    };
+    navigation.navigate('RideSummary', summaryData);
   };
 
   const handleGoBack = () => {

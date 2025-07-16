@@ -10,31 +10,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
+import MapView, { Marker } from 'react-native-maps';
+import socketManager from '../../utils/socket';
 
 export default function LiveTrackingScreen({ navigation, route }: any) {
   const { destination, estimate, driver } = route.params;
-  const [rideStatus, setRideStatus] = useState('arriving'); // arriving, picked_up, in_progress
-  const [currentETA, setCurrentETA] = useState(driver.eta);
+  // Remove simulated rideStatus and timers
+  // const [rideStatus, setRideStatus] = useState('arriving');
+  // const [currentETA, setCurrentETA] = useState(driver.eta);
 
-  useEffect(() => {
-    // Simulate ride progression
-    const timer1 = setTimeout(() => {
-      setRideStatus('picked_up');
-      setCurrentETA(estimate.duration);
-    }, 5000);
+  // State for driver's real-time location
+  const [driverLocation, setDriverLocation] = useState<{ latitude: number; longitude: number } | null>(
+    driver && driver.latitude && driver.longitude
+      ? { latitude: driver.latitude, longitude: driver.longitude }
+      : null
+  );
 
-    const timer2 = setTimeout(() => {
-      setRideStatus('in_progress');
-    }, 8000);
-
-    const timer3 = setTimeout(() => {
-      handleCompleteRide();
-    }, 15000);
-
+  // Listen for driver_location_update events 
+  React.useEffect(() => {
+    const handleLocationUpdate = (data: { latitude: number; longitude: number; driverId: string; userId: string }) => {
+      setDriverLocation({ latitude: data.latitude, longitude: data.longitude });
+    };
+    socketManager.onDriverLocationUpdate(handleLocationUpdate);
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
+      // Clean up callback
+      socketManager.onDriverLocationUpdate(() => {});
     };
   }, []);
 
@@ -60,57 +60,46 @@ export default function LiveTrackingScreen({ navigation, route }: any) {
     });
   };
 
-  const getStatusText = () => {
-    switch (rideStatus) {
-      case 'arriving':
-        return `${driver.name} is arriving in ${currentETA} mins`;
-      case 'picked_up':
-        return 'Ride started - Heading to destination';
-      case 'in_progress':
-        return `${currentETA} mins to destination`;
-      default:
-        return 'Tracking your ride...';
-    }
-  };
-
-  const getProgressPercentage = () => {
-    switch (rideStatus) {
-      case 'arriving':
-        return '33%';
-      case 'picked_up':
-        return '66%';
-      case 'in_progress':
-        return '100%';
-      default:
-        return '0%';
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Map Container */}
       <View style={styles.mapContainer}>
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={48} color={Colors.gray400} />
-          <Text style={styles.mapText}>Live Tracking</Text>
-          <Text style={styles.statusIndicator}>{rideStatus.replace('_', ' ').toUpperCase()}</Text>
-        </View>
-
-        {/* Status Overlay */}
-        <View style={styles.statusOverlay}>
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>{getStatusText()}</Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: getProgressPercentage() },
-                ]}
-              />
-            </View>
-          </View>
-        </View>
-
+        <MapView
+          style={{ flex: 1 }}
+          initialRegion={
+            driverLocation
+              ? {
+                  latitude: driverLocation.latitude,
+                  longitude: driverLocation.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }
+              : {
+                  latitude: 17.4448, // fallback
+                  longitude: 78.3498,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }
+          }
+          region={
+            driverLocation
+              ? {
+                  latitude: driverLocation.latitude,
+                  longitude: driverLocation.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }
+              : undefined
+          }
+        >
+          {driverLocation && (
+            <Marker
+              coordinate={driverLocation}
+              title={driver?.name || 'Driver'}
+              description={'Driver current location'}
+            />
+          )}
+        </MapView>
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.actionButton} onPress={handleCall}>
@@ -138,10 +127,6 @@ export default function LiveTrackingScreen({ navigation, route }: any) {
             <Text style={styles.vehicleInfo}>
               {driver.vehicleModel} • {driver.vehicleNumber}
             </Text>
-          </View>
-          <View style={styles.etaContainer}>
-            <Text style={styles.etaText}>{currentETA} min</Text>
-            <Text style={styles.etaLabel}>ETA</Text>
           </View>
         </View>
       </View>
@@ -173,12 +158,6 @@ export default function LiveTrackingScreen({ navigation, route }: any) {
             <Ionicons name="share" size={16} color={Colors.primary} />
             <Text style={styles.shareText}>Share Trip</Text>
           </TouchableOpacity>
-          
-          {rideStatus === 'in_progress' && (
-            <TouchableOpacity style={styles.completeButton} onPress={handleCompleteRide}>
-              <Text style={styles.completeText}>Complete Ride</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
     </SafeAreaView>
