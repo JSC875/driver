@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Alert } from 'react-native';
 import socketManager, { 
   RideRequestCallback, 
   RideTakenCallback, 
@@ -236,6 +237,31 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           });
         });
       }
+
+      // Listen for driver cancellation success
+      socketManager.onDriverCancellationSuccess((data) => {
+        console.log('✅ Driver cancellation successful:', data);
+        // Reset all driver state
+        setAcceptedRideDetails(null);
+        setCurrentRideRequest(null);
+        setAcceptingRideId(null);
+        setProcessedRideIds(new Set());
+        
+        // Send driver status as online
+        socketManager.sendDriverStatus({
+          driverId,
+          status: 'online'
+        });
+        
+        // Show success message
+        Alert.alert('Ride Cancelled', data.message || 'Ride cancelled successfully');
+      });
+
+      // Listen for driver cancellation error
+      socketManager.onDriverCancellationError((data) => {
+        console.log('❌ Driver cancellation failed:', data);
+        Alert.alert('Cancellation Error', data.message || 'Failed to cancel ride');
+      });
 
       // Send driver status when going online
       socketManager.sendDriverStatus({

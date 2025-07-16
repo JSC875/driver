@@ -703,8 +703,8 @@ export default function HomeScreen() {
       setCancelModalVisible(false);
       setCurrentRideToCancel(null);
       
-      // Navigate back to home
-      navigation.navigate('Home');
+      // Note: Navigation will be handled by the driver_cancellation_success event
+      // in the OnlineStatusContext
     }
   };
 
@@ -837,6 +837,24 @@ export default function HomeScreen() {
       navigation.navigate('NavigationScreen', { ride: navigationRide });
     }
   }, [acceptedRideDetails, navigation]);
+
+  // Listen for driver cancellation success
+  useEffect(() => {
+    const socket = socketManager.getSocket();
+    if (socket) {
+      const handleDriverCancellationSuccess = (data: any) => {
+        console.log('✅ Driver cancellation success received in HomeScreen:', data);
+        // Navigate to home screen after successful cancellation
+        navigation.navigate('Home');
+      };
+
+      socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+
+      return () => {
+        socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+      };
+    }
+  }, [navigation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>

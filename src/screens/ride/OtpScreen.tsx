@@ -30,6 +30,24 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
     }).start();
   }, []);
 
+  // Listen for driver cancellation success
+  React.useEffect(() => {
+    const socket = socketManager.getSocket();
+    if (socket) {
+      const handleDriverCancellationSuccess = (data: any) => {
+        console.log('✅ Driver cancellation success received in OtpScreen:', data);
+        // Navigate to home screen after successful cancellation
+        navigation.navigate('Home');
+      };
+
+      socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+
+      return () => {
+        socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+      };
+    }
+  }, [navigation]);
+
   const handleChange = (val: string, idx: number) => {
     if (!/^[0-9]?$/.test(val)) return;
     const newOtp = [...otp];
@@ -106,8 +124,7 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
               reason: 'Driver cancelled during OTP entry'
             });
             
-            // Navigate back to home
-            navigation.navigate('Home');
+            // Note: Navigation will be handled by the driver_cancellation_success event
           }
         }
       ]

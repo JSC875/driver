@@ -253,13 +253,30 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
               reason: 'Driver cancelled during pickup'
             });
             
-            // Navigate back to home
-            navigation.navigate('Home');
+            // Note: Navigation will be handled by the driver_cancellation_success event
           }
         }
       ]
     );
   };
+
+  // Listen for driver cancellation success
+  useEffect(() => {
+    const socket = socketManager.getSocket();
+    if (socket) {
+      const handleDriverCancellationSuccess = (data: any) => {
+        console.log('✅ Driver cancellation success received in NavigationScreen:', data);
+        // Navigate to home screen after successful cancellation
+        navigation.navigate('Home');
+      };
+
+      socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+
+      return () => {
+        socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+      };
+    }
+  }, [navigation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>

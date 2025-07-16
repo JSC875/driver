@@ -77,6 +77,21 @@ export type DriverStatusResetCallback = (data: {
   timestamp: number;
 }) => void;
 
+export type DriverCancellationSuccessCallback = (data: {
+  message: string;
+  cancellationFee: number;
+}) => void;
+
+export type DriverCancellationErrorCallback = (data: {
+  message: string;
+}) => void;
+
+export type DriverLocationUpdateCallback = (data: {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+}) => void;
+
 class SocketManager {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -92,6 +107,9 @@ class SocketManager {
   private onRideAcceptedWithDetailsCallback: RideAcceptedWithDetailsCallback | null = null;
   private onRideStatusUpdateCallback: RideStatusUpdateCallback | null = null;
   private onDriverStatusResetCallback: DriverStatusResetCallback | null = null;
+  private onDriverCancellationSuccessCallback: DriverCancellationSuccessCallback | null = null;
+  private onDriverCancellationErrorCallback: DriverCancellationErrorCallback | null = null;
+  private onDriverLocationUpdateCallback: DriverLocationUpdateCallback | null = null;
   private onConnectionChangeCallback: ((connected: boolean) => void) | null = null;
 
   connect(driverId: string) {
@@ -279,12 +297,18 @@ class SocketManager {
     // Handle driver cancellation responses
     this.socket.on('driver_cancellation_success', (data) => {
       console.log('✅ Driver cancellation successful:', data);
-      Alert.alert('Ride Cancelled', data.message || 'Ride cancelled successfully');
+      this.onDriverCancellationSuccessCallback?.(data);
     });
 
     this.socket.on('driver_cancellation_error', (data) => {
       console.log('❌ Driver cancellation failed:', data);
-      Alert.alert('Cancellation Error', data.message || 'Failed to cancel ride');
+      this.onDriverCancellationErrorCallback?.(data);
+    });
+
+    // Handle driver location updates
+    this.socket.on('driver_location_update', (data) => {
+      console.log('📍 Driver location update received:', data);
+      this.onDriverLocationUpdateCallback?.(data);
     });
   }
 
@@ -476,6 +500,18 @@ class SocketManager {
     this.onDriverStatusResetCallback = callback;
   }
 
+  onDriverCancellationSuccess(callback: DriverCancellationSuccessCallback) {
+    this.onDriverCancellationSuccessCallback = callback;
+  }
+
+  onDriverCancellationError(callback: DriverCancellationErrorCallback) {
+    this.onDriverCancellationErrorCallback = callback;
+  }
+
+  onDriverLocationUpdate(callback: DriverLocationUpdateCallback) {
+    this.onDriverLocationUpdateCallback = callback;
+  }
+
   onConnectionChange(callback: (connected: boolean) => void) {
     this.onConnectionChangeCallback = callback;
   }
@@ -489,6 +525,9 @@ class SocketManager {
     this.onRideAcceptedWithDetailsCallback = null;
     this.onRideStatusUpdateCallback = null;
     this.onDriverStatusResetCallback = null;
+    this.onDriverCancellationSuccessCallback = null;
+    this.onDriverCancellationErrorCallback = null;
+    this.onDriverLocationUpdateCallback = null;
     this.onConnectionChangeCallback = null;
   }
 }
