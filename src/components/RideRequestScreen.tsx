@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
   },
   acceptButtonText: {
-    color: 'red',
+    color: 'white',
     fontWeight: 'bold',
     fontSize: 22,
     letterSpacing: 1,

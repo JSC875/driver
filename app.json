@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Qride Driver",
-    "displayName": "Qride Driver",
+    "name": "Roqet Driver",
+    "displayName": "Roqet Driver",
     "slug": "user-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/Mainlogo.jpeg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "user-app",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/Mainlogo.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -23,7 +23,7 @@
     "android": {
       "package": "com.appacella.userapp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/Mainlogo.jpeg",
         "backgroundColor": "#ffffff"
       },
       "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
@@ -31,7 +31,7 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/Mainlogo.jpeg"
     },
     "plugins": [
       [

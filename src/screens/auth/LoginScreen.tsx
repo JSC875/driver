@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -146,7 +147,7 @@ export default function LoginScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
             <View style={styles.iconContainer}>
-              <Ionicons name="bicycle" size={60} color="#1877f2" />
+              <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 360, height: 360 }} />
             </View>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
@@ -158,7 +159,7 @@ export default function LoginScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Input
                 label="Mobile Number"
-                placeholder="Enter your 10-digit mobile number"
+                placeholder="Enter your mobile number"
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 keyboardType="phone-pad"
@@ -255,9 +256,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 4,

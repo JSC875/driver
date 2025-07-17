@@ -1032,7 +1032,7 @@ export default function HomeScreen() {
                 style={{
                 color: '#fff',
                 fontWeight: 'bold',
-                  fontSize: 22,
+                  fontSize: 18,
                   marginLeft: 80,
                 letterSpacing: 0.5,
                 zIndex: 1,
