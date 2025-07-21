@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ClerkProvider } from '@clerk/clerk-expo';
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { OnlineStatusProvider } from './src/store/OnlineStatusContext';
 import { RideHistoryProvider } from './src/store/RideHistoryContext';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const tokenCache = {
   async getToken(key: string) {
@@ -32,17 +33,49 @@ if (!publishableKey) {
   );
 }
 
+// Component to handle socket initialization
+function SocketInitializer() {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    const initializeSocket = async () => {
+      try {
+        console.log('🚀 App: Initializing socket connection on startup...');
+        
+        // Wait a bit for the app to fully load
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Initialize socket connection
+        const { socketManager } = require('./src/utils/socket');
+        await socketManager.initializeAPKConnection(getToken);
+        
+        console.log('✅ App: Socket connection initialized successfully');
+      } catch (error) {
+        console.error('❌ App: Failed to initialize socket connection:', error);
+        // Don't show error to user, let individual screens handle connection
+      }
+    };
+
+    initializeSocket();
+  }, [getToken]);
+
+  return null;
+}
+
 export default function App() {
   return (
-    <RideHistoryProvider>
-      <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-        <SafeAreaProvider>
-          <OnlineStatusProvider>
-            <StatusBar style="dark" backgroundColor="#ffffff" />
-            <AppNavigator />
-          </OnlineStatusProvider>
-        </SafeAreaProvider>
-      </ClerkProvider>
-    </RideHistoryProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <RideHistoryProvider>
+        <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+          <SafeAreaProvider>
+            <OnlineStatusProvider>
+              <StatusBar style="dark" backgroundColor="#ffffff" />
+              <SocketInitializer />
+              <AppNavigator />
+            </OnlineStatusProvider>
+          </SafeAreaProvider>
+        </ClerkProvider>
+      </RideHistoryProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -26,7 +26,12 @@
         "foregroundImage": "./assets/images/Mainlogo.jpeg",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -59,7 +64,14 @@
     "extra": {
       "router": {
         "origin": "https://project-a9dff482.dev.kiki.dev"
-      }
+      },
+      "eas": {
+        "projectId": "84f24d0c-26df-4cec-afe7-d75952191729"
+      },
+      "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXNlZnVsLWZsYW1pbmdvLTQxLmNsZXJrLmFjY291bnRzLmRldiQ",
+      "EXPO_PUBLIC_SOCKET_URL": "https://testsocketio-roqet.up.railway.app",
+      "EXPO_PUBLIC_API_URL": "https://bike-taxi-production.up.railway.app",
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU"
     }
   }
 }

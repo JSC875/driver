@@ -357,7 +357,7 @@ export default function HomeScreen() {
     isOnline, 
     setIsOnline, 
     isSocketConnected, 
-    currentRideRequest, 
+    currentRideRequests: contextRideRequests, 
     acceptedRideDetails,
     acceptRide, 
     rejectRide,
@@ -392,20 +392,35 @@ export default function HomeScreen() {
   const { addRide } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
 
+  // Get the current ride request (first one in the array)
+  const currentRideRequest = contextRideRequests.length > 0 ? contextRideRequests[0] : null;
+
   // Helper functions for driver status display
   const getDriverStatusColor = () => {
     if (!isSocketConnected) return '#FF3B30'; // Red for disconnected
     if (acceptedRideDetails) return '#FF9500'; // Orange for busy/on ride
-    if (currentRideRequest) return '#007AFF'; // Blue for considering ride
+    if (contextRideRequests.length > 0) return '#007AFF'; // Blue for considering ride
     return '#00C853'; // Green for available
   };
 
   const getDriverStatusText = () => {
     if (!isSocketConnected) return 'OFFLINE';
     if (acceptedRideDetails) return 'ON RIDE';
-    if (currentRideRequest) return 'CONSIDERING';
+    if (contextRideRequests.length > 0) return 'CONSIDERING';
     return 'AVAILABLE';
   };
+
+  // Debug connection status
+  useEffect(() => {
+    console.log('🔍 HomeScreen Connection Status Debug:');
+    console.log('- isOnline:', isOnline);
+    console.log('- isSocketConnected:', isSocketConnected);
+    console.log('- connectionStatus:', connectionStatus);
+    console.log('- driverId:', driverId);
+    console.log('- userType:', userType);
+    console.log('- Driver Status Color:', getDriverStatusColor());
+    console.log('- Driver Status Text:', getDriverStatusText());
+  }, [isOnline, isSocketConnected, connectionStatus, driverId, userType]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1375,8 +1390,16 @@ export default function HomeScreen() {
             await stopAllNotificationSounds(); // Safety net
             setRideRequest(null);
           }}
-          onAccept={handleAcceptRide}
-          onReject={handleRejectRide}
+          onAccept={() => {
+            if (currentRideRequest) {
+              handleAcceptRide(currentRideRequest);
+            }
+          }}
+          onReject={() => {
+            if (currentRideRequest) {
+              handleRejectRide(currentRideRequest);
+            }
+          }}
           playSound={!acceptedRideDetails} // Only play sound for new requests
         />
       )}
@@ -1397,6 +1420,8 @@ export default function HomeScreen() {
         >
           {currentRideRequests.slice(0, 2).map((ride, idx) => {
             const uiRide = mapBackendRideRequestToUI(ride);
+            const handleAccept = () => handleAcceptRide(ride);
+            const handleReject = () => handleRejectRide(ride);
             return (
               <View
                 key={uiRide.id}
@@ -1415,9 +1440,9 @@ export default function HomeScreen() {
               >
                 <RideRequestScreen
                   ride={uiRide}
-                  onClose={() => handleRejectRide(ride)}
-                  onAccept={() => handleAcceptRide(ride)}
-                  onReject={() => handleRejectRide(ride)}
+                  onClose={handleReject}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
                 />
               </View>
             );
