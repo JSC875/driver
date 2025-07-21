@@ -2,13 +2,13 @@
   "expo": {
     "name": "Roqet Driver",
     "displayName": "Roqet Driver",
-    "slug": "user-app",
+    "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/Mainlogo.jpeg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "user-app",
+    "scheme": "driver-app",
     "splash": {
       "image": "./assets/images/Mainlogo.jpeg",
       "resizeMode": "contain",
@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "package": "com.appacella.userapp",
+      "package": "com.roqet.driverapp",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/Mainlogo.jpeg",
         "backgroundColor": "#ffffff"
