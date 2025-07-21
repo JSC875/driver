@@ -10,7 +10,7 @@ import socketManager, {
 import { getDriverId, getUserType } from '../utils/jwtDecoder';
 import { useAuth } from '@clerk/clerk-expo';
 
-interface RideRequest {
+export interface RideRequest {
   rideId: string;
   pickup: {
     latitude: number;
@@ -63,7 +63,7 @@ const OnlineStatusContext = createContext<{
   isOnline: boolean;
   setIsOnline: (v: boolean) => void;
   isSocketConnected: boolean;
-  currentRideRequest: RideRequest | null;
+  currentRideRequests: RideRequest[];
   acceptedRideDetails: AcceptedRideDetails | null;
   acceptRide: (rideRequest: RideRequest) => void;
   rejectRide: (rideRequest: RideRequest) => void;
@@ -79,7 +79,7 @@ const OnlineStatusContext = createContext<{
   isOnline: false,
   setIsOnline: () => {},
   isSocketConnected: false,
-  currentRideRequest: null,
+  currentRideRequests: [],
   acceptedRideDetails: null,
   acceptRide: () => {},
   rejectRide: () => {},
@@ -96,7 +96,7 @@ const OnlineStatusContext = createContext<{
 export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOnline, setIsOnline] = useState(false);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
-  const [currentRideRequest, setCurrentRideRequest] = useState<RideRequest | null>(null);
+  const [currentRideRequests, setCurrentRideRequests] = useState<RideRequest[]>([]);
   const [acceptedRideDetails, setAcceptedRideDetails] = useState<AcceptedRideDetails | null>(null);
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [driverId, setDriverId] = useState('driver_001');
@@ -152,19 +152,19 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           return;
         }
         
-        // Only set current ride request if we don't have one already
-        if (!currentRideRequest) {
-          setCurrentRideRequest(data);
-        } else {
-          console.log('🚫 Already have a ride request, ignoring new one');
-        }
+        // Only add new ride request if we have less than 2 and it's not a duplicate
+        setCurrentRideRequests((prev) => {
+          if (prev.length >= 2 || prev.some(r => r.rideId === data.rideId)) {
+            console.log('🚫 Already have 2 ride requests or duplicate, ignoring new one');
+            return prev;
+          }
+          return [...prev, data];
+        });
       });
 
       socketManager.onRideTaken((data) => {
         console.log('✅ Ride taken by another driver:', data);
-        if (currentRideRequest?.rideId === data.rideId) {
-          setCurrentRideRequest(null);
-        }
+        setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
         // Remove from processed rides so it can be requested again if needed
         setProcessedRideIds(prev => {
           const newSet = new Set(prev);
@@ -182,7 +182,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (data.message && data.message.includes('already busy')) {
           console.log('🔄 Resetting driver status due to busy error');
           setAcceptedRideDetails(null);
-          setCurrentRideRequest(null);
+          setCurrentRideRequests([]); // Clear all ride requests on busy error
           setProcessedRideIds(new Set());
           
           // Send driver status as online
@@ -204,7 +204,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       socketManager.onRideResponseConfirmed((data) => {
         console.log('✅ Ride response confirmed:', data);
         if (data.response === 'rejected') {
-          setCurrentRideRequest(null);
+          setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
           // Add to processed rides after successful rejection
           setProcessedRideIds(prev => new Set([...prev, data.rideId]));
         }
@@ -213,7 +213,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       socketManager.onRideAcceptedWithDetails((data) => {
         console.log('✅ Ride accepted with details:', data);
         setAcceptedRideDetails(data);
-        setCurrentRideRequest(null);
+        setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
         setAcceptingRideId(null); // Reset accepting state
         // Add to processed rides after successful acceptance
         setProcessedRideIds(prev => new Set([...prev, data.rideId]));
@@ -226,7 +226,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           console.log('🔄 Driver status reset event received:', data);
           // Reset all driver state
           setAcceptedRideDetails(null);
-          setCurrentRideRequest(null);
+          setCurrentRideRequests([]); // Clear all ride requests on status reset
           setAcceptingRideId(null);
           setProcessedRideIds(new Set());
           
@@ -243,7 +243,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('✅ Driver cancellation successful:', data);
         // Reset all driver state
         setAcceptedRideDetails(null);
-        setCurrentRideRequest(null);
+        setCurrentRideRequests([]); // Clear all ride requests on cancellation success
         setAcceptingRideId(null);
         setProcessedRideIds(new Set());
         
@@ -277,7 +277,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       socketManager.disconnect();
       setIsSocketConnected(false);
       setConnectionStatus('Disconnected');
-      setCurrentRideRequest(null);
+      setCurrentRideRequests([]); // Clear all ride requests on offline
       setProcessedRideIds(new Set());
       setAcceptingRideId(null); // Reset accepting state
     }
@@ -315,7 +315,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       estimatedArrival: '5 minutes'
     });
     
-    setCurrentRideRequest(null);
+    setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== rideRequest.rideId));
     
     // Set a timeout to reset accepting state if no response is received
     setTimeout(() => {
@@ -331,7 +331,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       driverId: driverId // Use real driver ID from JWT
     });
     
-    setCurrentRideRequest(null);
+    setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== rideRequest.rideId));
   };
 
   const sendLocationUpdate = (data: { latitude: number; longitude: number; userId: string; driverId: string }) => {
@@ -368,7 +368,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const resetDriverStatus = () => {
     console.log('🔄 Resetting driver status to online');
     setAcceptedRideDetails(null);
-    setCurrentRideRequest(null);
+    setCurrentRideRequests([]); // Clear all ride requests on status reset
     setAcceptingRideId(null);
     setProcessedRideIds(new Set());
     
@@ -384,7 +384,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       isOnline, 
       setIsOnline, 
       isSocketConnected, 
-      currentRideRequest,
+      currentRideRequests,
       acceptedRideDetails,
       acceptRide,
       rejectRide,

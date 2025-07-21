@@ -18,6 +18,7 @@ import socketManager from '../../utils/socket';
 import * as Location from 'expo-location';
 import { useRideHistory } from '../../store/RideHistoryContext';
 import { useUserFromJWT } from '../../utils/jwtDecoder';
+import { RideRequest as BackendRideRequest } from '../../store/OnlineStatusContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -340,9 +341,8 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FF3B30' }}>Logout</Text>
           </TouchableOpacity>
         </Animated.View>
-        {halfScreen && (
-          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} activeOpacity={1} />
-        )}
+        {/* Always render the overlay for closing */}
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }} onPress={onClose} activeOpacity={1} />
       </View>
     </Modal>
   );
@@ -390,6 +390,7 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const [isLocating, setIsLocating] = useState(false);
   const { addRide } = useRideHistory();
+  const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
 
   // Helper functions for driver status display
   const getDriverStatusColor = () => {
@@ -604,61 +605,29 @@ export default function HomeScreen() {
     }).start();
   };
 
+  function mapBackendRideRequestToUI(backendRide: BackendRideRequest) {
+    return {
+      id: backendRide.rideId,
+      price: `₹${backendRide.price}`,
+      type: backendRide.rideType || 'Mini',
+      tag: 'Hyderabad',
+      rating: '4.95',
+      verified: true,
+      pickup: backendRide.pickup.address || backendRide.pickup.name || 'Pickup Location',
+      pickupAddress: backendRide.pickup.address || backendRide.pickup.name || 'Pickup Location',
+      dropoff: backendRide.drop.address || backendRide.drop.name || 'Drop Location',
+      dropoffAddress: backendRide.drop.address || backendRide.drop.name || 'Drop Location',
+      pickupDetails: backendRide.pickup,
+      dropoffDetails: backendRide.drop,
+    };
+  }
 
-
-  const handleAcceptRide = async () => {
-    if (rideRequest && currentRideRequest) {
-      console.log('✅ Accepting ride:', currentRideRequest);
-      await stopAllNotificationSounds(); // Safety net
-      // Send acceptance to socket server (this will also set driver status as busy)
-      acceptRide(currentRideRequest);
-      
-      // Save to ride history as accepted
-      addRide({
-        id: rideRequest.id + '-' + Date.now(),
-        date: new Date().toISOString().slice(0, 10),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: rideRequest.pickupAddress || '',
-        to: rideRequest.dropoffAddress || '',
-        driver: user?.fullName || 'You',
-        fare: Number(String(rideRequest.price).replace(/[^\d.]/g, '')) || 0,
-        distance: 0,
-        duration: 0,
-        status: 'accepted',
-        rating: 0,
-      });
-      
-      // Don't navigate immediately - wait for acceptedRideDetails to be set
-      // The navigation will happen in the useEffect below when acceptedRideDetails is available
-      setRideRequest(null);
-    } else {
-      console.error('❌ Cannot accept ride: missing rideRequest or currentRideRequest');
-    }
+  const handleAcceptRide = (ride: BackendRideRequest) => {
+    acceptRide(ride);
   };
 
-  const handleRejectRide = async () => {
-    if (currentRideRequest) {
-      await stopAllNotificationSounds(); // Safety net
-      addRide({
-        id: currentRideRequest.rideId + '-' + Date.now(),
-        date: new Date().toISOString().slice(0, 10),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: currentRideRequest.pickup.address || currentRideRequest.pickup.name,
-        to: currentRideRequest.drop.address || currentRideRequest.drop.name,
-        driver: user?.fullName || 'You',
-        fare: Number(String(currentRideRequest.price).replace(/[^\d.]/g, '')) || 0,
-        distance: 0,
-        duration: 0,
-        status: 'cancelled',
-        rating: 0,
-      });
-      
-      console.log('❌ Rejecting ride via socket:', currentRideRequest);
-      rejectRide(currentRideRequest);
-      
-
-    }
-    setRideRequest(null);
+  const handleRejectRide = (ride: BackendRideRequest) => {
+    rejectRide(ride);
   };
 
   const handleCancelRide = (ride: RideRequest) => {
@@ -856,6 +825,17 @@ export default function HomeScreen() {
       };
     }
   }, [navigation]);
+
+  // Request location permission on mount or when going online
+  useEffect(() => {
+    async function requestLocationPermission() {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Location permission is required to receive ride requests.');
+      }
+    }
+    requestLocationPermission();
+  }, []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
@@ -1070,10 +1050,11 @@ export default function HomeScreen() {
           },
         ]}
       >
+        {/* Hamburger/Menu Button */}
         <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
-            <Entypo name="menu" size={28} color="#222" />
-            <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
-          </TouchableOpacity>
+          <Entypo name="menu" size={28} color="#222" />
+          <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
+        </TouchableOpacity>
         <View style={styles.speedPill}>
           <Text style={styles.speedZero}>0</Text>
           <Text style={styles.speedZero}> | </Text>
@@ -1399,6 +1380,50 @@ export default function HomeScreen() {
           playSound={!acceptedRideDetails} // Only play sound for new requests
         />
       )}
+      {/* Dual notification card UI */}
+      {isOnline && currentRideRequests && currentRideRequests.length > 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            top: '18%',
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+            zIndex: 9999,
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 16,
+          }}
+        >
+          {currentRideRequests.slice(0, 2).map((ride, idx) => {
+            const uiRide = mapBackendRideRequestToUI(ride);
+            return (
+              <View
+                key={uiRide.id}
+                style={{
+                  width: currentRideRequests.length === 1 ? '90%' : '44%',
+                  marginRight: idx === 0 && currentRideRequests.length === 2 ? 16 : 0,
+                  shadowColor: idx === 0 ? '#007AFF' : '#FF9500',
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 16,
+                  elevation: 16,
+                  borderRadius: 24,
+                  overflow: 'visible',
+                  backgroundColor: '#fff',
+                }}
+              >
+                <RideRequestScreen
+                  ride={uiRide}
+                  onClose={() => handleRejectRide(ride)}
+                  onAccept={() => handleAcceptRide(ride)}
+                  onReject={() => handleRejectRide(ride)}
+                />
+              </View>
+            );
+          })}
+        </View>
+      )}
       <MenuModal
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
@@ -1497,6 +1522,21 @@ export default function HomeScreen() {
         onClose={() => setCancelModalVisible(false)}
         onConfirm={handleConfirmCancelRide}
       />
+      {/* Overlay to close menu when tapping outside */}
+      {menuVisible && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 3000,
+          }}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
