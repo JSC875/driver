@@ -1,8 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
+import React, { useEffect, useRef, useState, useContext } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Alert } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import socketManager from '../utils/socket';
+import { useOnlineStatus } from '../store/OnlineStatusContext';
 
 const { width } = Dimensions.get('window');
 
@@ -52,7 +54,20 @@ export async function stopAllNotificationSounds() {
 
 const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void; playSound?: boolean }) => {
   const [isAccepting, setIsAccepting] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const unavailableTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { driverId } = useOnlineStatus();
   
+  // Add debug logging for component mount
+  useEffect(() => {
+    console.log('🔄 RideRequestScreen mounted for ride:', ride.id);
+    console.log('📡 Socket connected:', socketManager.getConnectionStatus());
+    
+    return () => {
+      console.log('🔄 RideRequestScreen unmounted for ride:', ride.id);
+    };
+  }, []);
+
   const stopAudio = async () => {
     if (soundRef.current) {
       await soundRef.current.stopAsync();
@@ -60,9 +75,67 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
       soundRef.current = null;
     }
   };
+
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(100)).current;
   const acceptAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    console.log('🎯 Setting up socket listeners for ride:', ride.id);
+    
+    // Handle ride accept errors (e.g., ride already taken)
+    const handleRideAcceptError = (data: { message: string }) => {
+      console.log('❌ Received ride_accept_error:', data);
+      setIsAccepting(false);
+      setHasError(true);
+      stopAudio();
+      // Automatically reject the ride to update backend status
+      if (ride && driverId) {
+        socketManager.rejectRide({ rideId: ride.id, driverId });
+      }
+      if (unavailableTimeout.current) clearTimeout(unavailableTimeout.current);
+      unavailableTimeout.current = setTimeout(() => {
+        onClose();
+      }, 3000);
+    };
+
+    // Set up socket error listener
+    socketManager.onRideResponseError(handleRideAcceptError);
+    console.log('✅ Registered ride_accept_error listener');
+
+    // Handle ride taken notifications
+    const handleRideTaken = (data: { rideId: string; driverId: string }) => {
+      console.log('📢 Received ride_taken event:', data);
+      if (data.rideId === ride.id) {
+        setIsAccepting(false);
+        setHasError(true);
+        stopAudio();
+        // Automatically reject the ride to update backend status
+        if (ride && driverId) {
+          socketManager.rejectRide({ rideId: ride.id, driverId });
+        }
+        if (unavailableTimeout.current) clearTimeout(unavailableTimeout.current);
+        unavailableTimeout.current = setTimeout(() => {
+          onClose();
+        }, 3000);
+      }
+    };
+
+    socketManager.onRideTaken(handleRideTaken);
+    console.log('✅ Registered ride_taken listener');
+
+    // Clean up function
+    return () => {
+      socketManager.onRideResponseError(() => {});
+      socketManager.onRideTaken(() => {});
+      if (unavailableTimeout.current) clearTimeout(unavailableTimeout.current);
+      acceptAnim.stopAnimation();
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+    };
+  }, [ride.id, driverId]);
 
   useEffect(() => {
     // Animate overlay and card
@@ -119,12 +192,23 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
     };
   }, [playSound]);
 
+  const handleAcceptPress = async () => {
+    if (isAccepting || hasError) return;
+    console.log('👆 Accept button pressed for ride:', ride.id);
+    setIsAccepting(true);
+    await stopAudio();
+    onAccept();
+  };
+
   return (
     <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}> 
       <Animated.View style={[styles.cardContainer, { transform: [{ translateY: cardAnim.interpolate({ inputRange: [0, 100], outputRange: [0, 500] }) }] }]}> 
         {/* Close Button */}
         <TouchableOpacity onPress={async () => {
           await stopAudio();
+          if (onReject) {
+            onReject();
+          }
           onClose();
         }} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
@@ -162,27 +246,32 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
         </View>
         <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
           {onReject && (
-            <TouchableOpacity style={styles.rejectButton} onPress={async () => {
-              await stopAudio();
-              onReject();
-            }} activeOpacity={0.8}>
+            <TouchableOpacity 
+              style={styles.rejectButton} 
+              onPress={async () => {
+                await stopAudio();
+                onReject();
+                onClose();
+              }} 
+              activeOpacity={0.8}
+              disabled={isAccepting}
+            >
               <Text style={styles.rejectButtonText}>Reject</Text>
             </TouchableOpacity>
           )}
           <Animated.View style={{ flex: 1, alignItems: 'center', transform: [{ scale: acceptAnim }] }}>
             <TouchableOpacity 
-              style={[styles.acceptButton, isAccepting && styles.acceptButtonDisabled]} 
-              onPress={async () => {
-                if (isAccepting) return; // Prevent multiple clicks
-                setIsAccepting(true);
-                await stopAudio();
-                onAccept();
-              }} 
+              style={[
+                styles.acceptButton, 
+                isAccepting && styles.acceptButtonDisabled,
+                hasError && styles.acceptButtonError
+              ]} 
+              onPress={handleAcceptPress}
               activeOpacity={0.8}
-              disabled={isAccepting}
+              disabled={isAccepting || hasError}
             >
               <Text style={styles.acceptButtonText}>
-                {isAccepting ? 'Accepting...' : 'Accept'}
+                {isAccepting ? 'Accepting...' : hasError ? 'Unavailable' : 'Accept'}
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -278,6 +367,9 @@ const styles = StyleSheet.create({
   },
   acceptButtonDisabled: {
     backgroundColor: '#ccc',
+  },
+  acceptButtonError: {
+    backgroundColor: '#ff4444',
   },
   acceptButtonText: {
     color: 'white',
