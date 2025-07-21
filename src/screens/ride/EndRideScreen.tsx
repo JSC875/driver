@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   Vibration,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -147,12 +148,8 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-            {/* Replace car icon with bike icon */}
-            {/* <Ionicons name="car" size={48} color={Colors.primary} /> */}
-            <Ionicons name="bicycle" size={48} color={Colors.primary} />
-            {/* If you want a motorbike instead, use:
-            <MaterialCommunityIcons name="motorbike" size={48} color={Colors.primary} />
-            */}
+            {/* Replace icon with Mainlogo image */}
+            <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 105, height: 105, borderRadius: 50 }} resizeMode="contain" />
           </View>
         </View>
 
