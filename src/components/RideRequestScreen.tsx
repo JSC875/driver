@@ -34,7 +34,23 @@ export type RideRequest = {
   };
 };
 
-const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void }) => {
+// Shared soundRef for both component and static function
+const soundRef = { current: null as Audio.Sound | null };
+
+// Static method to stop all notification sounds
+export async function stopAllNotificationSounds() {
+  if (soundRef.current) {
+    try {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+    } catch (e) {
+      // Ignore errors
+    }
+    soundRef.current = null;
+  }
+}
+
+const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void; playSound?: boolean }) => {
   const [isAccepting, setIsAccepting] = useState(false);
   
   const stopAudio = async () => {
@@ -47,7 +63,6 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(100)).current;
   const acceptAnim = useRef(new Animated.Value(1)).current;
-  const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     // Animate overlay and card
@@ -79,21 +94,22 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
         }),
       ])
     ).start();
-    // Play sound and vibrate
-    (async () => {
-      try {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        // Load and play audio in loop
-        const { sound } = await Audio.Sound.createAsync(
-          require('../../assets/sounds/Ubersound.mp3'),
-          { shouldPlay: true, isLooping: true }
-        );
-        soundRef.current = sound;
-      } catch (e) {
-        console.log('Error playing audio:', e);
-      }
-    })();
+    // Play sound and vibrate only if playSound is true
+    if (playSound) {
+      (async () => {
+        try {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          // Load and play audio in loop
+          const { sound } = await Audio.Sound.createAsync(
+            require('../../assets/sounds/Ubersound.mp3'),
+            { shouldPlay: true, isLooping: true }
+          );
+          soundRef.current = sound;
+        } catch (e) {
+          console.log('Error playing audio:', e);
+        }
+      })();
+    }
     return () => {
       acceptAnim.stopAnimation();
       if (soundRef.current) {
@@ -101,7 +117,7 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
         soundRef.current = null;
       }
     };
-  }, []);
+  }, [playSound]);
 
   return (
     <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}> 

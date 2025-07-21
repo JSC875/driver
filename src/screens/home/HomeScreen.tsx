@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing,
 import MapView, { Marker, Polyline as MapPolyline, MapViewProps } from 'react-native-maps';
 import { MaterialIcons, Ionicons, FontAwesome, Entypo, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import RideRequestScreen, { RideRequest } from '../../components/RideRequestScreen';
+import RideRequestScreen, { RideRequest, stopAllNotificationSounds } from '../../components/RideRequestScreen';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -606,10 +606,10 @@ export default function HomeScreen() {
 
 
 
-  const handleAcceptRide = () => {
+  const handleAcceptRide = async () => {
     if (rideRequest && currentRideRequest) {
       console.log('✅ Accepting ride:', currentRideRequest);
-      
+      await stopAllNotificationSounds(); // Safety net
       // Send acceptance to socket server (this will also set driver status as busy)
       acceptRide(currentRideRequest);
       
@@ -636,8 +636,9 @@ export default function HomeScreen() {
     }
   };
 
-  const handleRejectRide = () => {
+  const handleRejectRide = async () => {
     if (currentRideRequest) {
+      await stopAllNotificationSounds(); // Safety net
       addRide({
         id: currentRideRequest.rideId + '-' + Date.now(),
         date: new Date().toISOString().slice(0, 10),
@@ -1389,9 +1390,13 @@ export default function HomeScreen() {
       {rideRequest && (
         <RideRequestScreen
           ride={rideRequest}
-          onClose={() => setRideRequest(null)}
+          onClose={async () => {
+            await stopAllNotificationSounds(); // Safety net
+            setRideRequest(null);
+          }}
           onAccept={handleAcceptRide}
           onReject={handleRejectRide}
+          playSound={!acceptedRideDetails} // Only play sound for new requests
         />
       )}
       <MenuModal

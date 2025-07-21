@@ -11,7 +11,7 @@ import {
   Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
@@ -147,7 +147,12 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-            <Ionicons name="car" size={48} color={Colors.primary} />
+            {/* Replace car icon with bike icon */}
+            {/* <Ionicons name="car" size={48} color={Colors.primary} /> */}
+            <Ionicons name="bicycle" size={48} color={Colors.primary} />
+            {/* If you want a motorbike instead, use:
+            <MaterialCommunityIcons name="motorbike" size={48} color={Colors.primary} />
+            */}
           </View>
         </View>
 
