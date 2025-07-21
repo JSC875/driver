@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "scheme": "driver-app",
     "splash": {
-      "image": "./assets/images/Mainlogo.jpeg",
+      "image": "./assets/images/splash-icon.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -51,7 +51,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.JPG",
+          "image": "./assets/images/splash-icon.jpeg",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
