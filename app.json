@@ -26,7 +26,10 @@
         "foregroundImage": "./assets/images/Mainlogo.jpeg",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU"
@@ -48,7 +51,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-icon.JPG",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -66,7 +69,7 @@
         "origin": "https://project-a9dff482.dev.kiki.dev"
       },
       "eas": {
-        "projectId": "84f24d0c-26df-4cec-afe7-d75952191729"
+        "projectId": "2310a216-9fa2-4e9b-bf24-b2735c3bc4e1"
       },
       "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXNlZnVsLWZsYW1pbmdvLTQxLmNsZXJrLmFjY291bnRzLmRldiQ",
       "EXPO_PUBLIC_SOCKET_URL": "https://testsocketio-roqet.up.railway.app",
