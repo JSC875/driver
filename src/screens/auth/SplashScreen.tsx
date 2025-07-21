@@ -13,7 +13,7 @@ const screens = [
     key: 'booking',
     illustration: (
       <View style={{ width: 300, height: 260, alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-        <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 270, height: 370, resizeMode: 'contain' }} />
+        <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 340, height: 370, resizeMode: 'contain' }} />
       </View>
     ),
     title: 'Welcome to ROQET',
