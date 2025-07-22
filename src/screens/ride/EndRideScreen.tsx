@@ -9,9 +9,10 @@ import {
   Dimensions,
   Platform,
   Vibration,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
@@ -147,7 +148,8 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <View style={styles.iconCircle}>
-            <Ionicons name="car" size={48} color={Colors.primary} />
+            {/* Replace icon with Mainlogo image */}
+            <Image source={require('../../../assets/images/Mainlogo.jpeg')} style={{ width: 105, height: 105, borderRadius: 50 }} resizeMode="contain" />
           </View>
         </View>
 

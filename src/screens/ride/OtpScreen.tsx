@@ -191,13 +191,13 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         >
           <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>Submit OTP</Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={{ backgroundColor: '#ff4444', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
           onPress={handleCancelRide}
           activeOpacity={0.8}
         >
           <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Cancel Ride</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         {submitted && (
           <Animated.View style={{ marginTop: 18, opacity: checkAnim, transform: [{ scale: checkAnim }] }}>
             <Ionicons name="checkmark-circle" size={48} color="#22C55E" />

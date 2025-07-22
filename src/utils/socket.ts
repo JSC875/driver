@@ -1,5 +1,7 @@
 import { io, Socket } from 'socket.io-client';
+import { getUserIdFromJWT, getUserTypeFromJWT } from './jwtDecoder';
 import { Alert } from 'react-native';
+import Constants from 'expo-constants';
 
 // Event callback types
 export type RideRequestCallback = (data: {
@@ -92,6 +94,21 @@ export type DriverLocationUpdateCallback = (data: {
   timestamp: number;
 }) => void;
 
+// Configuration for socket connection
+const SOCKET_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || process.env.EXPO_PUBLIC_SOCKET_URL || 'https://testsocketio-roqet.up.railway.app';
+
+console.log('🔧 Driver Socket URL configured:', SOCKET_URL, 'DEV mode:', __DEV__);
+console.log('🔧 Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL:', Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL);
+console.log('🔧 process.env.EXPO_PUBLIC_SOCKET_URL:', process.env.EXPO_PUBLIC_SOCKET_URL);
+
+// Validate socket URL
+if (!SOCKET_URL || SOCKET_URL === 'undefined') {
+  console.error('❌ CRITICAL: Socket URL is not configured properly!');
+  console.error('❌ Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL:', Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL);
+  console.error('❌ process.env.EXPO_PUBLIC_SOCKET_URL:', process.env.EXPO_PUBLIC_SOCKET_URL);
+  console.error('❌ Using fallback URL:', 'https://testsocketio-roqet.up.railway.app');
+}
+
 class SocketManager {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -126,24 +143,62 @@ class SocketManager {
     }
 
     try {
-      // Configuration for socket connection
-      const SOCKET_URL = "https://testsocketio-roqet.up.railway.app"; // Production
-      
       console.log('🔧 Driver Socket URL configured:', SOCKET_URL, 'DEV mode:', __DEV__);
       
-      // Connect to the Socket.IO server
-      this.socket = io(SOCKET_URL, {
+      // Validate socket URL before attempting connection
+      if (!SOCKET_URL || SOCKET_URL === 'undefined' || SOCKET_URL === 'null') {
+        console.error('❌ Cannot connect: Socket URL is invalid');
+        console.error('❌ SOCKET_URL:', SOCKET_URL);
+        console.error('❌ EXPO_PUBLIC_SOCKET_URL:', Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || process.env.EXPO_PUBLIC_SOCKET_URL);
+        throw new Error('Socket URL is not configured. Please check environment variables.');
+      }
+      
+      // Adjust configuration based on environment
+      const isProduction = !__DEV__;
+      const userAgent = isProduction ? 'ReactNative-APK' : 'ReactNative';
+      
+      // Enhanced socket configuration for better APK compatibility
+      const socketConfig = {
+        transports: ["websocket"], // Force WebSocket only for better reliability
         query: {
           type: 'driver',
-          id: driverId
+          id: driverId,
+          platform: isProduction ? 'android-apk' : 'react-native',
+          version: '1.0.0'
         },
-        transports: ['websocket', 'polling'],
-        timeout: 20000,
-        forceNew: true,
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-      });
+        reconnectionAttempts: isProduction ? 25 : 15, // More retries in production
+        reconnectionDelay: isProduction ? 1500 : 1000, // Shorter delay in production
+        reconnectionDelayMax: isProduction ? 8000 : 5000, // Shorter max delay in production
+        timeout: isProduction ? 25000 : 20000, // Longer timeout in production
+        forceNew: true,
+        upgrade: false, // Disable upgrade to prevent transport switching issues
+        rememberUpgrade: false,
+        autoConnect: true,
+        path: "/socket.io/",
+        extraHeaders: {
+          "Access-Control-Allow-Origin": "*",
+          "User-Agent": userAgent,
+          "X-Platform": "Android",
+          "X-Environment": isProduction ? "production" : "development",
+          "X-App-Version": "1.0.0"
+        },
+        // Additional options for better Android compatibility
+        withCredentials: false,
+        rejectUnauthorized: false,
+        // APK-specific settings
+        ...(isProduction && {
+          pingTimeout: 60000,
+          pingInterval: 25000,
+          maxReconnectionAttempts: 25,
+          reconnectionAttempts: 25
+        })
+      };
+
+      console.log('🔧 Socket configuration:', socketConfig);
+      
+      // Connect to the Socket.IO server
+      this.socket = io(SOCKET_URL, socketConfig);
 
       this.setupEventListeners();
     } catch (error) {
@@ -530,6 +585,174 @@ class SocketManager {
     this.onDriverLocationUpdateCallback = null;
     this.onConnectionChangeCallback = null;
   }
+
+  // New methods for APK compatibility
+  connectWithJWT = async (getToken: any) => {
+    const userId = await getUserIdFromJWT(getToken);
+    const userType = await getUserTypeFromJWT(getToken);
+    return this.connect(userId);
+  };
+
+  ensureSocketConnected = async (getToken: any) => {
+    console.log('🔍 Ensuring socket connection...');
+    
+    if (this.socket && this.isConnected) {
+      console.log('✅ Socket already connected');
+      return this.socket;
+    }
+    
+    console.log('🔌 Socket not connected, attempting to connect...');
+    try {
+      await this.connectWithJWT(getToken);
+      
+      // Wait a bit to ensure connection is stable
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify connection is still active
+      if (this.socket && this.isConnected) {
+        console.log('✅ Socket connection verified and stable');
+        return this.socket;
+      } else {
+        console.log('⚠️ Socket connection not stable, attempting retry...');
+        // Try one more time
+        await this.connectWithJWT(getToken);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return this.socket;
+      }
+    } catch (error) {
+      console.error('❌ Failed to connect socket:', error);
+      throw new Error('Unable to connect to server. Please check your internet connection.');
+    }
+  };
+
+  forceReconnect = async (getToken: any) => {
+    console.log('🔄 Force reconnecting socket...');
+    
+    // Disconnect existing socket
+    if (this.socket) {
+      console.log('🔄 Disconnecting existing socket...');
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    
+    this.isConnected = false;
+    this.reconnectAttempts = 0;
+    
+    // Wait a moment before reconnecting
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Reconnect with APK-specific handling
+    try {
+      await this.connectWithJWT(getToken);
+      
+      // Wait longer for APK builds to ensure connection is fully established
+      const waitTime = !__DEV__ ? 3000 : 2000;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      // Verify connection
+      if (this.socket && this.isConnected) {
+        console.log('✅ Force reconnect verified - socket is connected');
+      } else {
+        console.log('⚠️ Force reconnect completed but socket not verified as connected');
+        
+        // For APK builds, try one more time
+        if (!__DEV__) {
+          console.log('🔄 APK: Attempting one more reconnection...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          await this.connectWithJWT(getToken);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          if (this.socket && this.isConnected) {
+            console.log('✅ APK: Second reconnection attempt successful');
+          }
+        }
+      }
+      
+      return this.socket;
+    } catch (error) {
+      console.error('❌ Force reconnect failed:', error);
+      throw error;
+    }
+  };
+
+  initializeAPKConnection = async (getToken: any) => {
+    console.log("🚀 Initializing APK connection...");
+    
+    if (!__DEV__) {
+      console.log("🏗️ APK initialization mode");
+      
+      // Clear any existing connection
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = null;
+      }
+      
+      this.isConnected = false;
+      this.reconnectAttempts = 0;
+      
+      // Initial delay for APK
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      try {
+        // First connection attempt
+        console.log("🔄 APK: First connection attempt...");
+        await this.connectWithJWT(getToken);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        if (this.socket && this.isConnected) {
+          console.log("✅ APK: First connection successful");
+          return this.socket;
+        }
+        
+        // Second attempt with different strategy
+        console.log("🔄 APK: Second connection attempt...");
+        if (this.socket) {
+          this.socket.disconnect();
+          this.socket = null;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await this.connectWithJWT(getToken);
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        
+        if (this.socket && this.isConnected) {
+          console.log("✅ APK: Second connection successful");
+          return this.socket;
+        }
+        
+        // Final attempt with force reconnect
+        console.log("🔄 APK: Final connection attempt with force reconnect...");
+        await this.forceReconnect(getToken);
+        
+        return this.socket;
+        
+      } catch (error) {
+        console.error("❌ APK initialization failed:", error);
+        throw error;
+      }
+    } else {
+      // For development, use normal connection
+      return await this.ensureSocketConnected(getToken);
+    }
+  };
+
+  debugSocketConnection = () => {
+    console.log("🔍 Socket Debug Information:");
+    console.log("🌐 Socket URL:", SOCKET_URL);
+    console.log("📊 Connection State:", this.isConnected ? 'Connected' : 'Disconnected');
+    console.log("🔄 Reconnect Attempts:", this.reconnectAttempts);
+    console.log("🏗️ Environment:", __DEV__ ? 'Development' : 'Production');
+    
+    if (this.socket) {
+      console.log("🔗 Socket Details:");
+      console.log("- Exists: true");
+      console.log("- Connected:", this.socket.connected);
+      console.log("- ID:", this.socket.id || 'None');
+      console.log("- Transport:", this.socket.io?.engine?.transport?.name || 'Unknown');
+    } else {
+      console.log("🔗 Socket: null");
+    }
+  };
 }
 
 // Export singleton instance

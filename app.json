@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Qride Driver",
-    "displayName": "Qride Driver",
-    "slug": "user-app",
+    "name": "Roqet Driver",
+    "displayName": "Roqet Driver",
+    "slug": "driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/Mainlogo.jpeg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "user-app",
+    "scheme": "driver-app",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-icon.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -21,17 +21,25 @@
       }
     },
     "android": {
-      "package": "com.appacella.userapp",
+      "package": "com.roqet.driverapp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/Mainlogo.jpeg",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/Mainlogo.jpeg"
     },
     "plugins": [
       [
@@ -43,7 +51,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-icon.jpeg",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -59,7 +67,14 @@
     "extra": {
       "router": {
         "origin": "https://project-a9dff482.dev.kiki.dev"
-      }
+      },
+      "eas": {
+        "projectId": "2310a216-9fa2-4e9b-bf24-b2735c3bc4e1"
+      },
+      "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_dXNlZnVsLWZsYW1pbmdvLTQxLmNsZXJrLmFjY291bnRzLmRldiQ",
+      "EXPO_PUBLIC_SOCKET_URL": "https://testsocketio-roqet.up.railway.app",
+      "EXPO_PUBLIC_API_URL": "https://bike-taxi-production.up.railway.app",
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU"
     }
   }
 }

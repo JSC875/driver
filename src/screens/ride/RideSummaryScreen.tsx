@@ -116,7 +116,7 @@ export default function RideSummaryScreen({ navigation, route }: any) {
               <Text style={styles.statLabel}>Duration</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>₹{estimate.fare}</Text>
+              <Text style={styles.statValue}>{estimate.fare}</Text>
               <Text style={styles.statLabel}>Fare</Text>
             </View>
           </View>
@@ -172,12 +172,12 @@ export default function RideSummaryScreen({ navigation, route }: any) {
           <Text style={styles.cardTitle}>Payment Summary</Text>
           <View style={styles.paymentItem}>
             <Text style={styles.paymentLabel}>Ride Fare</Text>
-            <Text style={styles.paymentValue}>₹{estimate.fare}</Text>
+            <Text style={styles.paymentValue}>{estimate.fare}</Text>
           </View>
           <View style={styles.paymentDivider} />
           <View style={styles.paymentTotal}>
             <Text style={styles.paymentTotalLabel}>Total Received</Text>
-            <Text style={styles.paymentTotalValue}>₹{estimate.fare}</Text>
+            <Text style={styles.paymentTotalValue}>{estimate.fare}</Text>
           </View>
         </View>
       </ScrollView>

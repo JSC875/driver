@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Animated, // <-- Add Animated import
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +29,27 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   const { signUp, setActive: setSignUpActive } = useSignUp();
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const scaleAnims = useRef(otp.map(() => new Animated.Value(1))).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Animate scale when focused
+  const handleFocus = (index: number) => {
+    setFocusedIndex(index);
+    Animated.spring(scaleAnims[index], {
+      toValue: 1.15,
+      useNativeDriver: true,
+      friction: 4,
+    }).start();
+  };
+  const handleBlur = (index: number) => {
+    Animated.spring(scaleAnims[index], {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 4,
+    }).start();
+    setFocusedIndex(null);
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -43,11 +66,25 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     return () => clearInterval(interval);
   }, []);
 
+  // Animate bounce on digit entry
   const handleOtpChange = (value: string, index: number) => {
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
-
+    if (value) {
+      Animated.sequence([
+        Animated.spring(scaleAnims[index], {
+          toValue: 1.25,
+          useNativeDriver: true,
+          friction: 2,
+        }),
+        Animated.spring(scaleAnims[index], {
+          toValue: 1.15,
+          useNativeDriver: true,
+          friction: 4,
+        }),
+      ]).start();
+    }
     // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
@@ -60,6 +97,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     }
   };
 
+  // Animate shake if OTP is incorrect
   const handleVerifyOTP = async () => {
     const otpString = otp.join('');
     console.log('OTPVerificationScreen - Verifying OTP:', otpString);
@@ -67,6 +105,33 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     console.log('OTPVerificationScreen - Phone Number:', phoneNumber);
     
     if (otpString.length !== 6) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, {
+          toValue: 10,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: -10,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: 6,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: -6,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shakeAnim, {
+          toValue: 0,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+      ]).start();
       Alert.alert('Error', 'Please enter complete OTP');
       return;
     }
@@ -227,26 +292,32 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
           </View>
 
           <View style={styles.otpContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => {
-                  inputRefs.current[index] = ref;
-                }}
-                style={[
-                  styles.otpInput,
-                  digit && styles.otpInputFilled,
-                ]}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value, index)}
-                onKeyPress={({ nativeEvent }) =>
-                  handleKeyPress(nativeEvent.key, index)
-                }
-                keyboardType="number-pad"
-                maxLength={1}
-                textAlign="center"
-              />
-            ))}
+            <Animated.View style={{ flexDirection: 'row', transform: [{ translateX: shakeAnim }] }}>
+              {otp.map((digit, index) => (
+                <Animated.View key={index} style={{ transform: [{ scale: scaleAnims[index] }], marginHorizontal: 4 }}>
+                  <TextInput
+                    ref={(ref) => {
+                      inputRefs.current[index] = ref;
+                    }}
+                    style={[
+                      styles.otpInput,
+                      digit && styles.otpInputFilled,
+                      focusedIndex === index && styles.otpInputFocused,
+                    ]}
+                    value={digit}
+                    onChangeText={(value) => handleOtpChange(value, index)}
+                    onKeyPress={({ nativeEvent }) =>
+                      handleKeyPress(nativeEvent.key, index)
+                    }
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    textAlign="center"
+                    onFocus={() => handleFocus(index)}
+                    onBlur={() => handleBlur(index)}
+                  />
+                </Animated.View>
+              ))}
+            </Animated.View>
           </View>
 
           <View style={styles.resendContainer}>
@@ -335,6 +406,14 @@ const styles = StyleSheet.create({
   otpInputFilled: {
     borderColor: Colors.primary,
     backgroundColor: Colors.white,
+  },
+  otpInputFocused: {
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   resendContainer: {
     alignItems: 'center',

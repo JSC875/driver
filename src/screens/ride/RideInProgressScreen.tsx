@@ -273,6 +273,19 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
     }
   }, [navigation]);
 
+  // Add openGoogleMapsToDropoff function
+  const openGoogleMapsToDropoff = () => {
+    if (dropoffCoord) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${dropoffCoord.lat},${dropoffCoord.lng}`;
+      // For React Native, use Linking to open the URL
+      import('react-native').then(({ Linking }) => {
+        Linking.openURL(url);
+      });
+    } else {
+      Alert.alert('Navigation Error', 'Dropoff location is not available.');
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       {/* Full Screen Map */}
@@ -394,26 +407,12 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
       {/* Bottom Action Buttons */}
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }}>
         <View style={{ gap: 12, paddingHorizontal: 20 }}>
-          <TouchableOpacity
-            style={{ 
-              backgroundColor: '#1877f2', 
-              borderRadius: 16, 
-              paddingVertical: 18, 
-              paddingHorizontal: 32, 
-              width: '100%', 
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              shadowColor: '#1877f2',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-            onPress={() => {/* handle navigation to dropoff */}}
+        <TouchableOpacity
+            style={{ backgroundColor: '#3cb371', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#FF6B35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            onPress={openGoogleMapsToDropoff}
             activeOpacity={0.8}
           >
-            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Ionicons name="flag" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
           </TouchableOpacity>
           
@@ -439,7 +438,7 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
             <Ionicons name="stop-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>End Ride</Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={{ 
               backgroundColor: '#ff4444', 
               borderRadius: 16, 
@@ -460,7 +459,7 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
           >
             <Ionicons name="close-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Cancel Ride</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
     </SafeAreaView>

@@ -69,11 +69,6 @@ export default function ProfileScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>  
-          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'flex-end' }}>
-            <TouchableOpacity onPress={() => navigation.navigate('EditProfile')} style={{ padding: 8 }}>
-              <Ionicons name="pencil" size={22} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
           <View style={styles.profilePhotoContainer}>
             <Image source={{ uri: getUserPhoto() }} style={styles.profilePhoto} />
           </View>
@@ -97,9 +92,6 @@ export default function ProfileScreen() {
         <View style={styles.detailsCard}>
           <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.detailsTitle}>Personal Details</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('PersonalDetails')} style={{ padding: 8 }}>
-              <Ionicons name="pencil" size={20} color={Colors.primary} />
-            </TouchableOpacity>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Name:</Text>
