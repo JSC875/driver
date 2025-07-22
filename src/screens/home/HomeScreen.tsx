@@ -17,6 +17,7 @@ import { useOnlineStatus } from '../../store/OnlineStatusContext';
 import socketManager from '../../utils/socket';
 import * as Location from 'expo-location';
 import { useRideHistory } from '../../store/RideHistoryContext';
+import { useUserFromJWT } from '../../utils/jwtDecoder';
 
 const { width, height } = Dimensions.get('window');
 
@@ -201,28 +202,77 @@ function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void 
 
 // Helper: Geocode address to lat/lng
 async function geocodeAddress(address: string, apiKey: string) {
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data.results && data.results[0]) {
-    return data.results[0].geometry.location;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    // Log the response for debugging
+    console.log('Geocoding response:', data);
+    
+    if (data.status === 'REQUEST_DENIED') {
+      console.error('Google Maps API key error:', data.error_message);
+      throw new Error('API key error: ' + data.error_message);
+    }
+    
+    if (data.status === 'OVER_QUERY_LIMIT') {
+      console.error('Google Maps API quota exceeded');
+      throw new Error('API quota exceeded');
+    }
+    
+    if (data.results && data.results[0]) {
+      return data.results[0].geometry.location;
+    }
+    
+    console.error('No geocoding results for address:', address);
+    throw new Error('No geocoding results found');
+  } catch (error) {
+    console.error('Geocoding error:', error);
+    throw new Error('Geocoding failed: ' + error.message);
   }
-  throw new Error('Geocoding failed');
 }
 
 // Helper: Fetch directions and decode polyline
 async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, lng: number}, apiKey: string) {
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data.routes && data.routes[0]) {
-    const points = Polyline.decode(data.routes[0].overview_polyline.points);
-    return points.map(([latitude, longitude]: [number, number]) => ({ latitude, longitude }));
+  try {
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    // Log the response for debugging
+    console.log('Directions response:', data);
+    
+    if (data.status === 'REQUEST_DENIED') {
+      console.error('Google Maps API key error:', data.error_message);
+      throw new Error('API key error: ' + data.error_message);
+    }
+    
+    if (data.status === 'OVER_QUERY_LIMIT') {
+      console.error('Google Maps API quota exceeded');
+      throw new Error('API quota exceeded');
+    }
+    
+    if (data.routes && data.routes[0]) {
+      const points = Polyline.decode(data.routes[0].overview_polyline.points);
+      return points.map(([latitude, longitude]: [number, number]) => ({ latitude, longitude }));
+    }
+    
+    console.error('No routes found');
+    throw new Error('No routes found');
+  } catch (error) {
+    console.error('Directions fetch error:', error);
+    throw new Error('Directions fetch failed: ' + error.message);
   }
-  throw new Error('Directions fetch failed');
 }
 
+// Add a fallback for when geocoding fails
 const GOOGLE_MAPS_API_KEY = 'AIzaSyDHN3SH_ODlqnHcU9Blvv2pLpnDNkg03lU';
+
+// Add a fallback function for when geocoding fails
+const getFallbackCoordinates = (address: string) => {
+  // Return default coordinates for Hyderabad if geocoding fails
+  return { lat: 17.4375, lng: 78.4483 };
+};
 
 function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: RideRequest, onNavigate: () => void, onArrived: () => void, onClose: () => void }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -315,6 +365,21 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         }
       } catch (e) {
         console.error('Error fetching route:', e);
+        // Use fallback coordinates when geocoding fails
+        const fallbackPickup = getFallbackCoordinates(ride.pickupAddress);
+        const fallbackDropoff = getFallbackCoordinates(ride.dropoffAddress);
+        
+        setPickupCoord(fallbackPickup);
+        setDropoffCoord(fallbackDropoff);
+        
+        console.log('Using fallback coordinates due to geocoding error');
+        // Don't let geocoding errors prevent the ride acceptance
+        // Just show a basic map without route
+        Alert.alert(
+          'Map Loading Error', 
+          'Unable to load route details, but ride acceptance was successful. You can still navigate manually.',
+          [{ text: 'OK' }]
+        );
       }
     })();
   }, [ride.pickupAddress, ride.dropoffAddress, driverLocation, isLocationReady]);
@@ -1013,6 +1078,7 @@ export default function HomeScreen() {
   const { user, isLoaded } = useUser();
   const { getToken, signOut } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
+  const { getUserInfo } = useUserFromJWT();
   const { 
     isOnline, 
     setIsOnline, 
@@ -1021,7 +1087,11 @@ export default function HomeScreen() {
     acceptRide, 
     rejectRide,
     sendLocationUpdate,
-    sendRideStatusUpdate
+    sendRideStatusUpdate,
+    sendDriverStatus,
+    connectionStatus,
+    driverId,
+    userType
   } = useOnlineStatus();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
@@ -1276,9 +1346,17 @@ export default function HomeScreen() {
         status: 'accepted',
         rating: 0,
       });
-      // Send acceptance to socket server
+      
+      // Send acceptance to socket server using new enhanced method
       if (currentRideRequest) {
+        console.log('✅ Accepting ride via socket:', currentRideRequest);
         acceptRide(currentRideRequest);
+        
+        // Send driver status as busy
+        sendDriverStatus({
+          driverId: 'driver_001',
+          status: 'busy'
+        });
       }
       
       setNavigationRide(rideRequest);
@@ -1292,8 +1370,8 @@ export default function HomeScreen() {
         id: currentRideRequest.rideId + '-' + Date.now(),
         date: new Date().toISOString().slice(0, 10),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: currentRideRequest.pickup,
-        to: currentRideRequest.drop,
+        from: currentRideRequest.pickup.address || currentRideRequest.pickup.name,
+        to: currentRideRequest.drop.address || currentRideRequest.drop.name,
         driver: user?.fullName || 'You',
         fare: Number(String(currentRideRequest.price).replace(/[^\d.]/g, '')) || 0,
         distance: 0,
@@ -1301,6 +1379,8 @@ export default function HomeScreen() {
         status: 'cancelled',
         rating: 0,
       });
+      
+      console.log('❌ Rejecting ride via socket:', currentRideRequest);
       rejectRide(currentRideRequest);
     }
     setRideRequest(null);
@@ -1308,13 +1388,28 @@ export default function HomeScreen() {
 
   const handleNavigate = () => {
     if (navigationRide) {
-      const address = encodeURIComponent(navigationRide.pickupAddress);
+      // Use detailed location if available, otherwise fall back to address
+      const pickupLocation = navigationRide.pickupDetails;
+      const address = encodeURIComponent(
+        pickupLocation?.address || 
+        pickupLocation?.name || 
+        navigationRide.pickupAddress
+      );
       const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
       Linking.openURL(url);
     }
   };
 
   const handleArrived = () => {
+    // Send arrived status to socket server
+    if (navigationRide) {
+      sendRideStatusUpdate({
+        rideId: navigationRide.id,
+        status: 'arrived',
+        userId: 'user123', // This should come from the ride data
+        message: 'Driver has arrived at pickup location'
+      });
+    }
     setShowOtp(true);
   };
 
@@ -1322,12 +1417,29 @@ export default function HomeScreen() {
     setShowOtp(false);
     setRideInProgress(navigationRide);
     setNavigationRide(null);
+    
+    // Send ride started status to socket server
+    if (navigationRide) {
+      sendRideStatusUpdate({
+        rideId: navigationRide.id,
+        status: 'started',
+        userId: 'user123', // This should come from the ride data
+        message: 'Ride has started'
+      });
+    }
+    
     Alert.alert('OTP Verified', 'You can now start the ride!');
   };
 
   const handleNavigateToDropoff = () => {
     if (rideInProgress) {
-      const address = encodeURIComponent(rideInProgress.dropoffAddress);
+      // Use detailed location if available, otherwise fall back to address
+      const dropoffLocation = rideInProgress.dropoffDetails;
+      const address = encodeURIComponent(
+        dropoffLocation?.address || 
+        dropoffLocation?.name || 
+        rideInProgress.dropoffAddress
+      );
       const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
       Linking.openURL(url);
     }
@@ -1348,6 +1460,21 @@ export default function HomeScreen() {
         status: 'completed',
         rating: 5,
       });
+      
+      // Send ride completion to socket server
+      sendRideStatusUpdate({
+        rideId: rideInProgress.id,
+        status: 'completed',
+        userId: 'user123', // This should come from the ride data
+        message: 'Ride completed successfully'
+      });
+      
+      // Send driver status back to online
+      sendDriverStatus({
+        driverId: 'driver_001',
+        status: 'online'
+      });
+      
       navigation.navigate('EndRide', { ride: rideInProgress });
     }
   };
@@ -1400,6 +1527,11 @@ export default function HomeScreen() {
     }
   }, [rideRequest]);
 
+  // Type guard for address object
+  function hasAddress(obj: any): obj is { address: string } {
+    return obj && typeof obj === 'object' && typeof obj.address === 'string';
+  }
+
   // Handle incoming ride requests from socket
   useEffect(() => {
     if (currentRideRequest && isOnline) {
@@ -1414,9 +1546,12 @@ export default function HomeScreen() {
         rating: '4.95',
         verified: true,
         pickup: '5 min (2.1 km) away',
-        pickupAddress: currentRideRequest.pickup,
+        pickupAddress: currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location',
         dropoff: '25 min (12.3 km) trip',
-        dropoffAddress: currentRideRequest.drop,
+        dropoffAddress: currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location',
+        // Store detailed location information for navigation
+        pickupDetails: currentRideRequest.pickup,
+        dropoffDetails: currentRideRequest.drop,
       };
       
       setRideRequest(localRideRequest);
@@ -1461,6 +1596,25 @@ export default function HomeScreen() {
   const handleLogout = async () => {
     await signOut();
     navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  };
+
+  // Function to display JWT user information
+  const handleDisplayJWTInfo = async () => {
+    try {
+      const userInfo = await getUserInfo();
+      if (userInfo) {
+        Alert.alert(
+          'JWT User Information',
+          `User ID: ${userInfo.userId}\nUser Type: ${userInfo.userType}\nEmail: ${userInfo.email || 'N/A'}\nName: ${userInfo.name || 'N/A'}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'Could not retrieve user information from JWT');
+      }
+    } catch (error) {
+      console.error('Error displaying JWT info:', error);
+      Alert.alert('Error', 'Failed to get user information from JWT');
+    }
   };
 
   return (
@@ -1768,7 +1922,15 @@ export default function HomeScreen() {
                 fontSize: 10,
                 fontWeight: 'bold',
               }}>
-                {isSocketConnected ? 'CONNECTED' : 'DISCONNECTED'}
+                {connectionStatus}
+              </Text>
+              <Text style={{
+                color: '#fff',
+                fontSize: 8,
+                fontWeight: 'bold',
+                marginTop: 2,
+              }}>
+                ID: {driverId}
               </Text>
             </View>
           )}
@@ -1819,7 +1981,7 @@ export default function HomeScreen() {
                 try {
                   freshLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
                 } catch (err2) {
-                  // Both failed, show error
+                  console.log('Balanced accuracy also failed:', err2);
                   const errMsg = (err2 && typeof err2 === 'object' && 'message' in err2) ? (err2 as Error).message : '';
                   Alert.alert('Error', `Failed to fetch current location. Try going outdoors or enabling location services. ${errMsg}`);
                   setTimeout(() => setIsLocating(false), 2000);
@@ -1833,6 +1995,16 @@ export default function HomeScreen() {
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
                 }, 1000);
+                
+                // Send location update to socket server if online
+                if (isOnline && isSocketConnected) {
+                  sendLocationUpdate({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    userId: 'user123', // This should come from active ride data
+                    driverId: 'driver_001'
+                  });
+                }
               }
             } catch (error) {
               console.log('Location error:', error);
@@ -2046,9 +2218,21 @@ export default function HomeScreen() {
       {rideRequest && (
         <RideRequestScreen
           ride={rideRequest}
-          onClose={handleRejectRide}
-          onAccept={handleAcceptRide}
-          onReject={handleRejectRide}
+          onClose={() => setRideRequest(null)}
+          onAccept={() => {
+            // Accept logic here
+            if (currentRideRequest) {
+              acceptRide(currentRideRequest);
+              sendDriverStatus({ driverId: 'driver_001', status: 'busy' });
+            }
+            setRideRequest(null);
+          }}
+          onReject={() => {
+            if (currentRideRequest) {
+              rejectRide(currentRideRequest);
+            }
+            setRideRequest(null);
+          }}
         />
       )}
       {/* Navigation Screen */}
@@ -2168,46 +2352,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Ride Request Overlay */}
-      {rideRequest && (
-        <View style={{
-          position: 'absolute',
-          top: 100,
-          left: 20,
-          right: 20,
-          backgroundColor: '#fff',
-          borderRadius: 16,
-          padding: 24,
-          zIndex: 2000,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
-          elevation: 12,
-          alignItems: 'center',
-        }}>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>New Ride Request</Text>
-          <Text style={{ fontSize: 16, marginBottom: 4 }}>Pickup: {rideRequest.pickupAddress}</Text>
-          <Text style={{ fontSize: 16, marginBottom: 4 }}>Dropoff: {rideRequest.dropoffAddress}</Text>
-          <Text style={{ fontSize: 16, marginBottom: 4 }}>Type: {rideRequest.type}</Text>
-          <Text style={{ fontSize: 16, marginBottom: 12 }}>Price: {rideRequest.price}</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
-            <TouchableOpacity
-              style={{ backgroundColor: '#34C759', padding: 12, borderRadius: 8, flex: 1, marginRight: 8 }}
-              onPress={handleAcceptRide}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>Accept</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ backgroundColor: '#FF3B30', padding: 12, borderRadius: 8, flex: 1, marginLeft: 8 }}
-              onPress={handleRejectRide}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>Reject</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-      
       {/* Cancel Ride Modal */}
       <CancelRideModal
         visible={cancelModalVisible}
