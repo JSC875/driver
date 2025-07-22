@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import { useRideHistory } from '../../store/RideHistoryContext';
 import { useUserFromJWT } from '../../utils/jwtDecoder';
 import { RideRequest as BackendRideRequest } from '../../store/OnlineStatusContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -391,6 +392,7 @@ export default function HomeScreen() {
   const [isLocating, setIsLocating] = useState(false);
   const { addRide } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
+  const [driverCreated, setDriverCreated] = useState(false); // Track if API was called
 
   // Get the current ride request (first one in the array)
   const currentRideRequest = contextRideRequests.length > 0 ? contextRideRequests[0] : null;
@@ -851,6 +853,83 @@ export default function HomeScreen() {
     }
     requestLocationPermission();
   }, []);
+
+  useEffect(() => {
+    // Only run if user is loaded, user exists, and we haven't created the driver yet
+    if (!isLoaded || !user || driverCreated) return;
+
+    const createDriver = async () => {
+      console.log('[createDriver] Starting driver creation process...');
+      try {
+        // Get the custom Clerk JWT token for the driver app
+        const customToken = await getToken({ template: 'driver_app_token' });
+        console.log('[createDriver] Got custom Clerk JWT (driver_app_token):', customToken);
+        if (!customToken) {
+          console.error('[createDriver] No custom Clerk JWT found!');
+          return;
+        }
+
+        // Prepare form data (send custom JWT in token field)
+        const formData = new FormData();
+        formData.append('token', customToken); // custom JWT ONLY
+        formData.append('firstName', user.firstName || '');
+        formData.append('lastName', user.lastName || '');
+        formData.append('phoneNumber', user.phoneNumbers?.[0]?.phoneNumber || '');
+        formData.append('userType', 'driver');
+        // Add profileImage and licenseImage if needed
+        console.log('[createDriver] FormData prepared (custom JWT, Authorization header will be set):', {
+          token: customToken,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phoneNumber: user.phoneNumbers?.[0]?.phoneNumber,
+          userType: 'driver',
+        });
+
+        // Send request (Authorization header with custom JWT)
+        console.log('[createDriver] Sending POST request to /drivers/createDrivers with Authorization header...');
+        const response = await fetch('https://roqet-production.up.railway.app/drivers/createDrivers', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${customToken}`,
+            // Do NOT set Content-Type for multipart/form-data
+          },
+          body: formData,
+        });
+        console.log('[createDriver] Response received. Status:', response.status);
+
+        // Try to read response as text first
+        const rawText = await response.text();
+        console.log('[createDriver] Raw response text:', rawText);
+
+        let data = null;
+        if (rawText) {
+          try {
+            data = JSON.parse(rawText);
+            console.log('[createDriver] Parsed JSON:', data);
+          } catch (jsonErr) {
+            console.error('[createDriver] Failed to parse response as JSON:', jsonErr);
+          }
+        } else {
+          console.warn('[createDriver] Response body is empty');
+        }
+
+        if (response.ok && data?.data?.clerkDriverId) {
+          // Save clerk user id to local storage
+          await AsyncStorage.setItem('clerkDriverId', data.data.clerkDriverId);
+          console.log('[createDriver] Clerk user id saved to AsyncStorage:', data.data.clerkDriverId);
+          setDriverCreated(true);
+        } else if (response.status === 403) {
+          console.error('[createDriver] 403 Forbidden. Check your custom JWT and backend permissions.');
+        } else {
+          console.error('[createDriver] Backend error or missing clerkDriverId:', data);
+        }
+      } catch (error) {
+        console.error('[createDriver] Error during driver creation:', error);
+      }
+    };
+
+    createDriver();
+  }, [isLoaded, user, driverCreated, getToken]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
