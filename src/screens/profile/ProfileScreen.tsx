@@ -14,6 +14,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const { user } = useUser();
@@ -60,8 +61,19 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, marginTop: 8 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
+          <Ionicons name="arrow-back" size={26} color={Colors.primary} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: Colors.text, marginLeft: 8 }}>Profile</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>  
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'flex-end' }}>
+            <TouchableOpacity onPress={() => navigation.navigate('EditProfile')} style={{ padding: 8 }}>
+              <Ionicons name="pencil" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
           <View style={styles.profilePhotoContainer}>
             <Image source={{ uri: getUserPhoto() }} style={styles.profilePhoto} />
           </View>
@@ -83,7 +95,12 @@ export default function ProfileScreen() {
         </Animated.View>
 
         <View style={styles.detailsCard}>
+          <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.detailsTitle}>Personal Details</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('PersonalDetails')} style={{ padding: 8 }}>
+              <Ionicons name="pencil" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Name:</Text>
             <Text style={styles.detailValue}>{getUserName()}</Text>

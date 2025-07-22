@@ -26,47 +26,7 @@ export const mockDrivers = [
   },
 ];
 
-export const mockRideHistory = [
-  {
-    id: '1',
-    date: '2024-01-15',
-    time: '09:30 AM',
-    from: 'Koramangala',
-    to: 'Electronic City',
-    driver: 'Rajesh Kumar',
-    fare: 85,
-    distance: 12.5,
-    duration: 25,
-    status: 'completed',
-    rating: 5,
-  },
-  {
-    id: '2',
-    date: '2024-01-14',
-    time: '06:45 PM',
-    from: 'Indiranagar',
-    to: 'Whitefield',
-    driver: 'Suresh Reddy',
-    fare: 120,
-    distance: 18.2,
-    duration: 35,
-    status: 'completed',
-    rating: 4,
-  },
-  {
-    id: '3',
-    date: '2024-01-13',
-    time: '02:15 PM',
-    from: 'MG Road',
-    to: 'HSR Layout',
-    driver: 'Arun Singh',
-    fare: 65,
-    distance: 8.5,
-    duration: 18,
-    status: 'completed',
-    rating: 5,
-  },
-];
+export const mockRideHistory = [];
 
 export const mockPaymentMethods = [
   {

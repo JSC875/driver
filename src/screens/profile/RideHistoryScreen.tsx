@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { mockRideHistory } from '../../data/mockData';
+import { useRideHistory } from '../../store/RideHistoryContext';
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +21,7 @@ export default function RideHistoryScreen({ navigation }: any) {
   const [selectedTab, setSelectedTab] = useState('completed');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const { rides, clearHistory } = useRideHistory();
 
   useEffect(() => {
     Animated.parallel([
@@ -36,6 +38,8 @@ export default function RideHistoryScreen({ navigation }: any) {
       }),
     ]).start();
   }, []);
+
+  const filteredRides = rides.filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'));
 
   const renderRideItem = ({ item, index }: any) => (
     <Animated.View
@@ -80,13 +84,17 @@ export default function RideHistoryScreen({ navigation }: any) {
           </View>
           
           <View style={styles.rideActions}>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={14} color={Colors.accent} />
-              <Text style={styles.ratingText}>{item.rating}</Text>
-            </View>
-            <TouchableOpacity style={styles.rebookButton} activeOpacity={0.7}>
-              <Text style={styles.rebookText}>Rebook</Text>
-            </TouchableOpacity>
+            {item.status === 'cancelled' ? (
+              <View style={styles.cancellationContainer}>
+                <Ionicons name="close-circle" size={14} color="#ff4444" />
+                <Text style={styles.cancellationText}>{item.cancellationReason}</Text>
+              </View>
+            ) : (
+              <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={14} color={Colors.accent} />
+                <Text style={styles.ratingText}>{item.rating}</Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -150,12 +158,16 @@ export default function RideHistoryScreen({ navigation }: any) {
 
       {/* Ride List */}
       <FlatList
-        data={mockRideHistory}
+        data={filteredRides}
         renderItem={renderRideItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+      {/* Clear History Button */}
+      <TouchableOpacity style={{ alignSelf: 'center', margin: 16 }} onPress={clearHistory}>
+        <Text style={{ color: Colors.primary, fontWeight: 'bold' }}>Clear Ride History</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -341,6 +353,23 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     fontWeight: '600',
     color: Colors.text,
+  },
+  cancellationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff5f5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffebee',
+  },
+  cancellationText: {
+    fontSize: Layout.fontSize.xs,
+    color: '#ff4444',
+    fontWeight: '500',
+    marginLeft: 4,
+    flex: 1,
   },
   rebookButton: {
     backgroundColor: Colors.primary,

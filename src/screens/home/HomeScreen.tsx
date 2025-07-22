@@ -15,8 +15,147 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAssignUserType } from '../../utils/helpers';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
 import socketManager from '../../utils/socket';
+import * as Location from 'expo-location';
+import { useRideHistory } from '../../store/RideHistoryContext';
 
 const { width, height } = Dimensions.get('window');
+
+function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
+  const [selectedReason, setSelectedReason] = useState<string>('');
+  const anim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+
+  const cancelReasons = [
+    'Passenger not found at pickup location',
+    'Passenger requested cancellation',
+    'Vehicle breakdown',
+    'Traffic/road conditions',
+    'Personal emergency',
+    'Unsafe pickup location',
+    'Other'
+  ];
+
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: visible ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
+
+  const handleConfirm = () => {
+    if (selectedReason) {
+      onConfirm(selectedReason);
+      setSelectedReason('');
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: anim.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)'] }),
+      justifyContent: 'center',
+      alignItems: 'center',
+      opacity: anim,
+      zIndex: 10000,
+    }}>
+      <Animated.View style={{
+        width: width - 40,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
+      }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222', marginBottom: 16, textAlign: 'center' }}>
+          Cancel Ride
+        </Text>
+        <Text style={{ fontSize: 16, color: '#666', marginBottom: 20, textAlign: 'center' }}>
+          Please select a reason for cancelling this ride
+        </Text>
+        
+        <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+          {cancelReasons.map((reason, index) => (
+            <TouchableOpacity
+              key={index}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                backgroundColor: selectedReason === reason ? '#e3f2fd' : '#f8f9fa',
+                marginBottom: 8,
+                borderWidth: 2,
+                borderColor: selectedReason === reason ? '#1877f2' : 'transparent',
+              }}
+              onPress={() => setSelectedReason(reason)}
+              activeOpacity={0.7}
+            >
+              <View style={{
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                borderWidth: 2,
+                borderColor: selectedReason === reason ? '#1877f2' : '#ccc',
+                backgroundColor: selectedReason === reason ? '#1877f2' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}>
+                {selectedReason === reason && (
+                  <Ionicons name="checkmark" size={12} color="#fff" />
+                )}
+              </View>
+              <Text style={{
+                fontSize: 15,
+                color: selectedReason === reason ? '#1877f2' : '#333',
+                fontWeight: selectedReason === reason ? '600' : '400',
+                flex: 1,
+              }}>
+                {reason}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={{ flexDirection: 'row', marginTop: 20, gap: 12 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: '#f8f9fa',
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#e0e0e0',
+            }}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: '#666', fontWeight: '600', fontSize: 16 }}>Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: selectedReason ? '#ff4444' : '#ccc',
+              borderRadius: 12,
+              paddingVertical: 14,
+              alignItems: 'center',
+            }}
+            onPress={handleConfirm}
+            disabled={!selectedReason}
+            activeOpacity={selectedReason ? 0.7 : 1}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel Ride</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
 function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
@@ -91,9 +230,64 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
   const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const [isLocationReady, setIsLocationReady] = useState(false);
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const pickupPulse = useRef(new Animated.Value(1)).current;
   const pickupBgOpacity = useRef(new Animated.Value(0.5)).current;
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  // Start location tracking
+  useEffect(() => {
+    const startLocationTracking = async () => {
+      try {
+        // Request location permissions
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          setIsLocationReady(true); // Mark as ready even if denied
+          return;
+        }
+
+        // Get initial location
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setDriverLocation({
+          latitude: initialLocation.coords.latitude,
+          longitude: initialLocation.coords.longitude,
+        });
+        setIsLocationReady(true);
+
+        // Start watching location
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000, // Update every 5 seconds
+            distanceInterval: 10, // Update every 10 meters
+          },
+          (location) => {
+            setDriverLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error('Error starting location tracking:', error);
+        setIsLocationReady(true); // Mark as ready even if error
+      }
+    };
+
+    startLocationTracking();
+
+    // Cleanup location subscription
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -102,13 +296,28 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
-        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-        setRouteCoords(route);
+        
+        // Wait for location to be ready before calculating route
+        if (isLocationReady) {
+          // Always prioritize driver location to pickup route
+          if (driverLocation) {
+            const route = await fetchRoute(
+              { lat: driverLocation.latitude, lng: driverLocation.longitude },
+              pickup,
+              GOOGLE_MAPS_API_KEY
+            );
+            setRouteCoords(route);
+          } else {
+            // Only fallback to pickup-to-dropoff if no driver location at all
+            const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+            setRouteCoords(route);
+          }
+        }
       } catch (e) {
-        // handle error
+        console.error('Error fetching route:', e);
       }
     })();
-  }, [ride.pickupAddress, ride.dropoffAddress]);
+  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation, isLocationReady]);
 
   useEffect(() => {
     if (routeCoords.length > 1 && mapRef.current) {
@@ -163,78 +372,91 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
         showsUserLocation
       >
         {pickupCoord && (
-          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+          <Marker 
+            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
+            title="Pickup"
+            pinColor="#00C853"
+          />
         )}
         {dropoffCoord && (
-          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+          <Marker 
+            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
+            title="Dropoff"
+            pinColor="#FF6B35"
+          />
         )}
         {routeCoords.length > 1 && (
-          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+          <MapPolyline 
+            coordinates={routeCoords} 
+            strokeWidth={4} 
+            strokeColor="#1877f2"
+            zIndex={1}
+          />
+        )}
+        {driverLocation && (
+          <Marker
+            coordinate={driverLocation}
+            title="You"
+            pinColor="#1877f2"
+          />
         )}
       </MapView>
       
-      {/* Top Routing Bar */}
+      {/* Highlighted Route Info & Pickup/Dropoff Card */}
       <View style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0,
-        backgroundColor: 'linear-gradient(90deg, #e3f0ff 0%, #f6faff 100%)', // soft blue gradient
-        paddingTop: 50,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        elevation: 10,
+        top: insets.top + 16,
+        left: 16,
+        right: 16,
+        // Use a soft blue-green background for the whole card
+        backgroundColor: '#e0f7fa', // light blue-green (cyan)
+        borderRadius: 20,
+        padding: 20,
         shadowColor: '#000',
-        shadowOpacity: 0.10,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
       }}>
-        {/* Close Button */}
-        <TouchableOpacity
-          onPress={onClose} 
-          style={{ 
-            position: 'absolute', 
-            top: 60, 
-            right: 20, 
-            zIndex: 10, 
-            backgroundColor: 'rgba(0,0,0,0.1)', 
-            borderRadius: 20, 
-            padding: 8,
-            width: 40,
-            height: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="close" size={24} color="#333" />
-        </TouchableOpacity>
-        
-        {/* Route Header */}
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ backgroundColor: '#1877f2', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-            <Ionicons name="navigate" size={28} color="#fff" />
+        {/* Top Bar with Route Info - No Close Icon */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+        }}>
+          {/* Remove the close button here */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Navigate to Pickup</Text>
+            <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>ETA: {ride.pickup}</Text>
           </View>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Navigate to Pickup</Text>
-          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>ETA: {ride.pickup}</Text>
-        </View>
-
-        {/* Route Information */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
+          {/* Small Cancel Button */}
+        <TouchableOpacity
+          style={{ 
+              backgroundColor: '#ff4444',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+          }}
+            onPress={onClose}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Cancel</Text>
+        </TouchableOpacity>
+          </View>
+        {/* Animated Pickup/Dropoff Cards - blend into card, no separate backgrounds */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {/* Pickup (Animated) */}
           <Animated.View style={{ flex: 1, opacity: pickupBgOpacity }}>
             <Animated.View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#B9F6CA',
+              backgroundColor: '#00e676', // static, bright green
               borderRadius: 16,
               marginRight: 12,
-              padding: 6,
+              padding: 8,
               transform: [{ scale: pickupPulse }],
-              shadowColor: '#00C853',
-              shadowOpacity: 0.5,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 8,
             }}>
               <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                 <Ionicons name="location" size={16} color="#fff" />
@@ -245,12 +467,10 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
               </View>
             </Animated.View>
           </Animated.View>
-          
           {/* Arrow */}
           <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-down" size={20} color="#999" />
+            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
           </View>
-          
           {/* Dropoff (Static) */}
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
@@ -266,7 +486,7 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
 
       {/* Bottom Action Buttons */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 12, paddingHorizontal: 20 }}>
           <TouchableOpacity
             style={{ 
               backgroundColor: '#1877f2', 
@@ -289,7 +509,6 @@ function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: Ride
             <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
       </TouchableOpacity>
-          
       <TouchableOpacity
             style={{ 
               backgroundColor: '#00C853', 
@@ -453,10 +672,52 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
   const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
   const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
   const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const dropoffPulse = useRef(new Animated.Value(1)).current;
   const dropoffBgOpacity = useRef(new Animated.Value(0.5)).current;
+  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
+  // Start location tracking
+  useEffect(() => {
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setDriverLocation({
+          latitude: initialLocation.coords.latitude,
+          longitude: initialLocation.coords.longitude,
+        });
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 5000,
+            distanceInterval: 10,
+          },
+          (location) => {
+            setDriverLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error('Error starting location tracking:', error);
+      }
+    };
+    startLocationTracking();
+    return () => {
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -465,13 +726,24 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
         const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
         setPickupCoord(pickup);
         setDropoffCoord(dropoff);
-        const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-        setRouteCoords(route);
+        // Route from driver location to dropoff
+        if (driverLocation) {
+          const route = await fetchRoute(
+            { lat: driverLocation.latitude, lng: driverLocation.longitude },
+            dropoff,
+            GOOGLE_MAPS_API_KEY
+          );
+          setRouteCoords(route);
+        } else {
+          // Fallback to pickup to dropoff
+          const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
+          setRouteCoords(route);
+        }
       } catch (e) {
-        // handle error
+        console.error('Error fetching route:', e);
       }
     })();
-  }, [ride.pickupAddress, ride.dropoffAddress]);
+  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation]);
 
   useEffect(() => {
     if (routeCoords.length > 1 && mapRef.current) {
@@ -526,66 +798,61 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
         showsUserLocation
       >
         {pickupCoord && (
-          <Marker coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} title="Pickup" />
+          <Marker 
+            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
+            title="Pickup"
+            pinColor="#00C853"
+          />
         )}
         {dropoffCoord && (
-          <Marker coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} title="Dropoff" />
+          <Marker 
+            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
+            title="Dropoff"
+            pinColor="#FF6B35"
+          />
         )}
         {routeCoords.length > 1 && (
-          <MapPolyline coordinates={routeCoords} strokeWidth={5} strokeColor="#1877f2" />
+          <MapPolyline 
+            coordinates={routeCoords} 
+            strokeWidth={4} 
+            strokeColor="#1877f2"
+            zIndex={1}
+          />
+        )}
+        {driverLocation && (
+          <Marker
+            coordinate={driverLocation}
+            title="You"
+            pinColor="#1877f2"
+          />
         )}
       </MapView>
       
-      {/* Top Routing Bar */}
+      {/* Top Card with Route Info & Pickup/Dropoff */}
       <View style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0,
-        backgroundColor: 'linear-gradient(90deg, #f7faff 0%, #e3f0ff 100%)', // soft blue gradient
-        paddingTop: 50,
-        paddingBottom: 20,
-        paddingHorizontal: 20,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        elevation: 10,
+        top: 56,
+        left: 16,
+        right: 16,
+        backgroundColor: '#e0f7fa', // match NavigationScreen
+        borderRadius: 20,
+        padding: 20,
         shadowColor: '#000',
-        shadowOpacity: 0.10,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
       }}>
-        {/* Close Button */}
-        <TouchableOpacity
-          onPress={onClose} 
-          style={{ 
-            position: 'absolute', 
-            top: 60, 
-            right: 20, 
-            zIndex: 10, 
-            backgroundColor: 'rgba(0,0,0,0.1)', 
-            borderRadius: 20, 
-            padding: 8,
-            width: 40,
-            height: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="close" size={24} color="#333" />
-        </TouchableOpacity>
-        
         {/* Route Header */}
         <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ backgroundColor: '#00C853', borderRadius: 25, width: 50, height: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-            <Ionicons name="car" size={28} color="#fff" />
-          </View>
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
           <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
         </View>
-
         {/* Route Information */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', borderRadius: 12, padding: 16 }}>
-          {/* Pickup (Static) */}
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
-            <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Pickup (plain, not highlighted) */}
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 12, backgroundColor: 'transparent', borderRadius: 16, padding: 8 }}>
+            <View style={{ backgroundColor: '#e0e0e0', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
               <Ionicons name="checkmark" size={16} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
@@ -593,20 +860,18 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
               <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
             </View>
           </View>
-          
           {/* Arrow */}
           <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-down" size={20} color="#999" />
+            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
           </View>
-          
-          {/* Dropoff (Animated) */}
+          {/* Dropoff (Animated, lighter highlight) */}
           <Animated.View style={{ flex: 1, opacity: dropoffBgOpacity }}>
             <Animated.View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#FFD6B0',
+              backgroundColor: '#ffe0b2', // lighter orange
               borderRadius: 16,
-              padding: 6,
+              padding: 8,
               transform: [{ scale: dropoffPulse }],
               shadowColor: '#FF6B35',
               shadowOpacity: 0.5,
@@ -614,12 +879,12 @@ function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: 
               shadowOffset: { width: 0, height: 2 },
               elevation: 8,
             }}>
-              <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <View style={{ backgroundColor: '#ffb74d', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                 <Ionicons name="flag" size={16} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
-                <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
+                <Text style={{ fontSize: 13, color: '#222', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
               </View>
             </Animated.View>
           </Animated.View>
@@ -708,28 +973,32 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
           <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 18, textAlign: 'center' }}>Menu</Text>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Home'); onClose(); }}>
             <Ionicons name="home" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Home</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Refer'); onClose(); }}>
+            <Ionicons name="gift" size={26} color="#1877f2" style={{ marginRight: 16 }} />
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Refer</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('RideHistory'); onClose(); }}>
             <Ionicons name="time" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Ride History</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Ride History</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Wallet'); onClose(); }}>
             <Ionicons name="wallet" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Wallet</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Wallet</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Settings'); onClose(); }}>
             <Ionicons name="settings" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Settings</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Settings</Text>
           </TouchableOpacity>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('HelpSupport'); onClose(); }}>
             <Ionicons name="help-circle" size={24} color="#1877f2" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#222' }}>Support</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Support</Text>
           </TouchableOpacity>
           <View style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onLogout}>
             <Ionicons name="log-out" size={24} color="#FF3B30" style={{ marginRight: 16 }} />
-            <Text style={{ fontSize: 18, color: '#FF3B30' }}>Logout</Text>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FF3B30' }}>Logout</Text>
           </TouchableOpacity>
         </Animated.View>
         {halfScreen && (
@@ -769,9 +1038,14 @@ export default function HomeScreen() {
   const [menuVisible, setMenuVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const [safetyModalVisible, setSafetyModalVisible] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [currentRideToCancel, setCurrentRideToCancel] = useState<RideRequest | null>(null);
   const rippleAnim = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
+  const mapRef = useRef<MapView>(null); // Typed ref for MapView
+  const [isLocating, setIsLocating] = useState(false);
+  const { addRide } = useRideHistory();
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -988,6 +1262,20 @@ export default function HomeScreen() {
 
   const handleAcceptRide = () => {
     if (rideRequest) {
+      // Save to ride history as accepted
+      addRide({
+        id: rideRequest.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: rideRequest.pickupAddress || '',
+        to: rideRequest.dropoffAddress || '',
+        driver: user?.fullName || 'You',
+        fare: Number(String(rideRequest.price).replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'accepted',
+        rating: 0,
+      });
       // Send acceptance to socket server
       if (currentRideRequest) {
         acceptRide(currentRideRequest);
@@ -999,11 +1287,22 @@ export default function HomeScreen() {
   };
 
   const handleRejectRide = () => {
-    // Send rejection to socket server
     if (currentRideRequest) {
+      addRide({
+        id: currentRideRequest.rideId + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: currentRideRequest.pickup,
+        to: currentRideRequest.drop,
+        driver: user?.fullName || 'You',
+        fare: Number(String(currentRideRequest.price).replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'cancelled',
+        rating: 0,
+      });
       rejectRide(currentRideRequest);
     }
-    
     setRideRequest(null);
   };
 
@@ -1036,7 +1335,58 @@ export default function HomeScreen() {
 
   const handleEndRide = () => {
     if (rideInProgress) {
+      addRide({
+        id: rideInProgress.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: rideInProgress.pickupAddress || '',
+        to: rideInProgress.dropoffAddress || '',
+        driver: user?.fullName || 'You',
+        fare: Number(String(rideInProgress.price).replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'completed',
+        rating: 5,
+      });
       navigation.navigate('EndRide', { ride: rideInProgress });
+    }
+  };
+
+  const handleCancelRide = (ride: RideRequest) => {
+    setCurrentRideToCancel(ride);
+    setCancelModalVisible(true);
+  };
+
+  const handleConfirmCancelRide = (reason: string) => {
+    if (currentRideToCancel) {
+      // Add to ride history with cancellation reason
+      addRide({
+        id: currentRideToCancel.id + '-' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        from: currentRideToCancel.pickupAddress || '',
+        to: currentRideToCancel.dropoffAddress || '',
+        driver: user?.fullName || 'You',
+        fare: Number(String(currentRideToCancel.price).replace(/[^\d.]/g, '')) || 0,
+        distance: 0,
+        duration: 0,
+        status: 'cancelled',
+        cancellationReason: reason,
+      });
+
+      // Close modals and reset state
+      setCancelModalVisible(false);
+      setCurrentRideToCancel(null);
+      
+      // Close navigation screen if it's open
+      if (navigationRide?.id === currentRideToCancel.id) {
+        setNavigationRide(null);
+      }
+      
+      // Close ride in progress if it's open
+      if (rideInProgress?.id === currentRideToCancel.id) {
+        setRideInProgress(null);
+      }
     }
   };
 
@@ -1120,6 +1470,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="dark-content" translucent />
       {/* Map */}
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
         initialRegion={{
           latitude: 17.4375, // Example: Hyderabad
@@ -1389,6 +1740,7 @@ export default function HomeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
+            zIndex: 2000, // Ensure always above overlays
           },
         ]}
       >
@@ -1425,25 +1777,75 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </Animated.View>
-      {/* Center Marker */}
-      <Animated.View
+      {/* Floating location icon - now outside the top bar, truly floating at right mid-screen */}
+      {isOnline && (
+        <TouchableOpacity
+          disabled={isLocating}
         style={{
           position: 'absolute',
-          top: '48%',
-          left: '50%',
-          transform: [{ translateX: -20 }, { translateY: -32 }],
+            right: 20,
+            top: '50%',
+            transform: [{ translateY: -32 }],
           backgroundColor: '#fff',
-          borderRadius: 16,
-          padding: 8,
+            borderRadius: 32,
+            padding: 16,
+            elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 8,
-        }}
-      >
-        <MaterialIcons name="navigation" size={32} color="#222" style={{ transform: [{ rotate: '0deg' }] }} />
-      </Animated.View>
+            zIndex: 2100,
+            opacity: isLocating ? 0.6 : 1,
+          }}
+          onPress={async () => {
+            setIsLocating(true);
+            try {
+              // Try to get last known position instantly
+              let location = await Location.getLastKnownPositionAsync();
+              if (location && mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }, 1000);
+              }
+              // Now fetch a fresh position in the background (Balanced accuracy)
+              let freshLocation = null;
+              try {
+                freshLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              } catch (err1) {
+                // If Balanced fails, try Highest
+                try {
+                  freshLocation = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+                } catch (err2) {
+                  // Both failed, show error
+                  const errMsg = (err2 && typeof err2 === 'object' && 'message' in err2) ? (err2 as Error).message : '';
+                  Alert.alert('Error', `Failed to fetch current location. Try going outdoors or enabling location services. ${errMsg}`);
+                  setTimeout(() => setIsLocating(false), 2000);
+                  return;
+                }
+              }
+              if (freshLocation && mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: freshLocation.coords.latitude,
+                  longitude: freshLocation.coords.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }, 1000);
+              }
+            } catch (error) {
+              console.log('Location error:', error);
+              const errMsg = (error && typeof error === 'object' && 'message' in error) ? (error as Error).message : '';
+              Alert.alert('Error', `Failed to fetch current location. ${errMsg}`);
+            } finally {
+              setTimeout(() => setIsLocating(false), 2000); // debounce for 2 seconds
+            }
+          }}
+        >
+          <Ionicons name="navigate" size={32} color="#1877f2" />
+        </TouchableOpacity>
+      )}
       {/* Bottom Online/Offline Bar */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
         {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
@@ -1651,12 +2053,14 @@ export default function HomeScreen() {
       )}
       {/* Navigation Screen */}
       {navigationRide && !showOtp && (
+        <>
         <NavigationScreen
           ride={navigationRide}
           onNavigate={handleNavigate}
           onArrived={handleArrived}
-          onClose={() => setNavigationRide(null)}
+            onClose={() => handleCancelRide(navigationRide)}
         />
+        </>
       )}
       {/* OTP Screen */}
       {navigationRide && showOtp && (
@@ -1677,7 +2081,7 @@ export default function HomeScreen() {
         onClose={() => setMenuVisible(false)}
         onNavigate={(screen) => {
           setMenuVisible(false);
-          navigation.navigate(screen as never);
+            navigation.navigate(screen as never);
         }}
         halfScreen={false}
         onLogout={handleLogout}
@@ -1803,6 +2207,13 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
+      
+      {/* Cancel Ride Modal */}
+      <CancelRideModal
+        visible={cancelModalVisible}
+        onClose={() => setCancelModalVisible(false)}
+        onConfirm={handleConfirmCancelRide}
+      />
     </SafeAreaView>
   );
 }

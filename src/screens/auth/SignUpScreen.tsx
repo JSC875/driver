@@ -68,8 +68,25 @@ interface CountryItem {
   name: string;
 }
 
+// Add a helper function for alphabetic validation
+function isAlpha(str: string) {
+  return /^[A-Za-z]+$/.test(str);
+}
+
 // Step 1: Name Entry
 function NameStep({ firstName, lastName, setFirstName, setLastName, onNext }: NameStepProps) {
+  // Add local handler for Next button
+  const handleNext = () => {
+    if (!isAlpha(firstName.trim())) {
+      Alert.alert('Invalid First Name', 'First name should contain only alphabetic characters.');
+      return;
+    }
+    if (!isAlpha(lastName.trim())) {
+      Alert.alert('Invalid Last Name', 'Last name should contain only alphabetic characters.');
+      return;
+    }
+    onNext();
+  };
   return (
     <View style={styles.stepContainer}>
       <Text style={styles.progress}>Step 1 of 4</Text>
@@ -90,7 +107,7 @@ function NameStep({ firstName, lastName, setFirstName, setLastName, onNext }: Na
       />
       <Button
         title="Next"
-        onPress={onNext}
+        onPress={handleNext}
         fullWidth
         disabled={!firstName.trim() || !lastName.trim()}
         style={{ marginTop: 24 }}
@@ -618,6 +635,18 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       // Validate that both names are provided
       if (!firstName.trim() || !lastName.trim()) {
         Alert.alert('Error', 'Please enter both first name and last name');
+        setIsLoading(false);
+        return;
+      }
+
+      // Add validation for alphabetic characters
+      if (!isAlpha(firstName.trim())) {
+        Alert.alert('Invalid First Name', 'First name should contain only alphabetic characters.');
+        setIsLoading(false);
+        return;
+      }
+      if (!isAlpha(lastName.trim())) {
+        Alert.alert('Invalid Last Name', 'Last name should contain only alphabetic characters.');
         setIsLoading(false);
         return;
       }
