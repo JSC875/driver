@@ -18,7 +18,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSignUp, useUser } from '@clerk/clerk-expo';
+import { useSignUp, useUser, useAuth } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
@@ -518,6 +518,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const { signUp, isLoaded } = useSignUp();
   const { user } = useUser();
   const { setTestAuthenticated } = useAuthStore();
+  const { getToken } = useAuth();
 
   // Timer for OTP resend
   useEffect(() => {
@@ -586,13 +587,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
 
   // Step 3: Verify OTP
   const handleVerifyOTP = async () => {
-    // Prevent multiple verification attempts
-    if (isLoading || otpVerified) {
-      return;
-    }
-    
     setIsLoading(true);
-    setOtpError('');
     try {
       const otpString = otp.join('');
       console.log('OTP verification attempt with:', otpString);
@@ -636,29 +631,28 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       if (completeSignUp?.status === 'complete') {
         console.log('OTP verification successful, navigating to next step');
         setOtpVerified(true);
-        // The sign-up is complete, navigate to the next step
-        // The session will be automatically set active by Clerk
         goToNextStep();
       } else if (completeSignUp?.status === 'missing_requirements') {
         console.log('OTP verified but missing requirements, updating user data');
         console.log('Available firstName:', firstName);
         console.log('Available lastName:', lastName);
         console.log('Missing fields:', completeSignUp?.missingFields);
-        
         // OTP is verified but we need to provide the missing fields
         try {
           const updateData: any = {};
           if (firstName.trim()) updateData.firstName = firstName.trim();
           if (lastName.trim()) updateData.lastName = lastName.trim();
-          
           console.log('Updating user with data:', updateData);
           await signUp?.update(updateData);
           console.log('User data updated successfully, navigating to next step');
           setOtpVerified(true);
           goToNextStep();
+          return;
         } catch (updateErr: any) {
           console.error('Error updating user data:', updateErr);
-          const updateErrorMessage = updateErr?.errors?.[0]?.message || updateErr?.message || 'Failed to update user profile';
+          const updateErrorMessage = (updateErr && typeof updateErr === 'object' && 'errors' in updateErr && Array.isArray(updateErr.errors) && updateErr.errors[0]?.message)
+            ? updateErr.errors[0].message
+            : (updateErr && typeof updateErr === 'object' && 'message' in updateErr ? updateErr.message : 'Failed to update user profile');
           throw new Error(updateErrorMessage);
         }
       } else {
@@ -689,6 +683,26 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     }
   };
 
+  // Helper to wait for user to be defined
+  const waitForUser = async (user: any, maxTries = 10, delay = 200) => {
+    for (let i = 0; i < maxTries; i++) {
+      if (user) return user;
+      await new Promise(res => setTimeout(res, delay));
+    }
+    throw new Error('User not available after signup');
+  };
+
+  const fetchAndStoreJWT = async () => {
+    try {
+      const token = await getToken({ template: 'driver-app-token' });
+      // Store token in global store or local state as needed
+      console.log('Fetched JWT after signup:', token);
+      // Optionally: pass token to Home via navigation params
+    } catch (err) {
+      console.error('Failed to fetch JWT after signup:', err);
+    }
+  };
+
   // Step 4: Complete Profile
   const handleCompleteProfile = async () => {
     setIsLoading(true);
@@ -705,22 +719,19 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
         ]);
         return;
       }
-      
-      // Update user profile with Clerk
+      // Wait for user to be defined
+      await waitForUser(user);
+      // Update user profile with Clerk and set userType to driver
       await user?.update({ 
         firstName: firstName.trim(), 
-        lastName: lastName.trim() 
+        lastName: lastName.trim(),
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
       });
-      
-      // TODO: Handle profile image upload if needed
-      // if (profileImage) {
-      //   await user?.setProfileImage({ file: profileImage });
-      // }
-      
-      console.log('Profile updated successfully, user should be redirected to main app');
+      // Fetch JWT after signup/profile completion
+      await fetchAndStoreJWT();
       // The user is now signed in and will be automatically redirected to the main app
       // Clerk's useAuth hook will handle the navigation
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating profile:', err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
@@ -729,7 +740,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   };
 
   // Step 4: Skip profile
-  const handleSkipProfile = () => {
+  const handleSkipProfile = async () => {
     // Check if this is a test OTP flow
     if (otpVerified && !user) {
       console.log('Test OTP flow detected, skipping profile setup');
@@ -741,7 +752,16 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       ]);
       return;
     }
-    
+    // Wait for user to be defined
+    await waitForUser(user);
+    // Set userType in Clerk metadata if user is available
+    if (user) {
+      await user.update({
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+      });
+    }
+    // Fetch JWT after signup/profile skip
+    await fetchAndStoreJWT();
     console.log('Profile setup skipped, user should be redirected to main app');
     // The user is now signed in and will be automatically redirected to the main app
     // Clerk's useAuth hook will handle the navigation
