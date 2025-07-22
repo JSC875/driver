@@ -18,7 +18,6 @@ import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { useAssignUserType } from '../../utils/helpers';
-import { useAuthStore } from '../../store/useAuthStore';
 
 export default function ProfileSetupScreen({ navigation }: any) {
   const [firstName, setFirstName] = useState('');
@@ -27,9 +26,8 @@ export default function ProfileSetupScreen({ navigation }: any) {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useUser();
-  const { setTestAuthenticated } = useAuthStore();
 
-  useAssignUserType('user');
+  useAssignUserType('customer');
 
   const handleImagePicker = () => {
     Alert.alert(
@@ -52,22 +50,20 @@ export default function ProfileSetupScreen({ navigation }: any) {
     setIsLoading(true);
     
     try {
-      // Check if user exists (for test OTP flow, user might not be properly signed in)
-      if (user) {
-        // Update user profile with Clerk
-        await user.update({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-        });
+      // Update user profile with Clerk
+      await user?.update({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'customer' }
+      });
 
-        // Add email if provided
-        if (email.trim()) {
-          await user.createEmailAddress({ email: email.trim() });
-        }
+      // Add email if provided
+      if (email.trim()) {
+        await user?.createEmailAddress({ email: email.trim() });
       }
 
-      // Navigate to DocumentUploadScreen instead of home
-      navigation.navigate('DocumentUpload');
+      // Don't navigate manually - the auth state will handle the transition
+      Alert.alert('Success', 'Profile updated successfully!');
     } catch (err: any) {
       console.error('Error updating profile:', err);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
@@ -77,12 +73,8 @@ export default function ProfileSetupScreen({ navigation }: any) {
   };
 
   const handleSkip = () => {
-    Alert.alert('Profile Setup', 'You can complete your profile later from the settings.', [
-      { text: 'OK', onPress: () => {
-        console.log('Profile setup skipped, setting test authentication');
-        setTestAuthenticated(true);
-      }}
-    ]);
+    // Don't navigate manually - the auth state will handle the transition
+    Alert.alert('Profile Setup', 'You can complete your profile later from the settings.');
   };
 
   return (
@@ -180,7 +172,7 @@ const styles = StyleSheet.create({
     paddingBottom: Layout.spacing.lg,
   },
   title: {
-    fontSize: Layout.fontSize.xl,
+    fontSize: Layout.fontSize.xxl,
     fontWeight: 'bold',
     color: Colors.text,
     marginBottom: Layout.spacing.sm,

@@ -28,6 +28,7 @@ import FindingDriverScreen from '../screens/ride/FindingDriverScreen';
 import LiveTrackingScreen from '../screens/ride/LiveTrackingScreen';
 import ChatScreen from '../screens/ride/ChatScreen';
 import RideSummaryScreen from '../screens/ride/RideSummaryScreen';
+import EndRideScreen from '../screens/ride/EndRideScreen';
 
 // Profile Screens
 import ProfileScreen from '../screens/profile/ProfileScreen';
@@ -37,6 +38,7 @@ import SettingsScreen from '../screens/profile/SettingsScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PersonalDetailsScreen from '../screens/profile/PersonalDetailsScreen';
 import AboutScreen from '../screens/profile/AboutScreen';
+import PrivacySecurityScreen from '../screens/profile/PrivacySecurityScreen';
 
 // Support Screens
 import HelpSupportScreen from '../screens/support/HelpSupportScreen';
@@ -114,6 +116,7 @@ function MainNavigator() {
       <Stack.Screen name="LiveTracking" component={LiveTrackingScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="RideSummary" component={RideSummaryScreen} />
+      <Stack.Screen name="EndRide" component={EndRideScreen} />
       {/* Profile Flow */}
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="RideHistory" component={RideHistoryScreen} />
@@ -122,6 +125,7 @@ function MainNavigator() {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
     </Stack.Navigator>
   );
 }

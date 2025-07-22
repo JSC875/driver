@@ -1,54 +1,24 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Image,
-  Alert,
   Animated,
-  Dimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth, useUser } from '@clerk/clerk-expo';
+import { useUser } from '@clerk/clerk-expo';
+import { useAuth } from '@clerk/clerk-expo';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
-import { useFocusEffect } from '@react-navigation/native';
 
-const { width } = Dimensions.get('window');
-
-const profileOptions = [
-  {
-    id: '0',
-    title: 'Personal Details',
-    icon: 'person-circle-outline',
-    screen: 'PersonalDetails',
-  },
-  {
-    id: '2',
-    title: 'Wallet & Payments',
-    icon: 'wallet-outline',
-    screen: 'Wallet',
-  },
-  {
-    id: '3',
-    title: 'Settings',
-    icon: 'settings-outline',
-    screen: 'Settings',
-  },
-  {
-    id: '4',
-    title: 'About',
-    icon: 'information-circle-outline',
-    screen: 'About',
-  },
-];
-
-export default function ProfileScreen({ navigation, route }: any) {
-  const { signOut } = useAuth();
+export default function ProfileScreen() {
   const { user } = useUser();
+  const { signOut } = useAuth();
+  const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
@@ -72,67 +42,6 @@ export default function ProfileScreen({ navigation, route }: any) {
     return user?.imageUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
   };
 
-  const [profilePhoto, setProfilePhoto] = useState(getUserPhoto());
-
-  useFocusEffect(
-    useCallback(() => {
-      if (route?.params?.updatedPhoto) {
-        setProfilePhoto(route.params.updatedPhoto);
-      }
-    }, [route])
-  );
-
-  const handleOptionPress = (screen: string) => {
-    if (screen === 'PersonalDetails') {
-      navigation.navigate('PersonalDetails', {
-        name: getUserName(),
-        email: getUserEmail(),
-        phone: getUserPhone(),
-        gender: '',
-        emergencyName: '',
-        emergencyPhone: '',
-        photo: getUserPhoto(),
-      });
-    } else if (screen === 'EditProfile') {
-      navigation.navigate('EditProfile');
-    } else if (screen === 'RideHistory') {
-      navigation.navigate('RideHistory');
-    } else if (screen === 'Wallet') {
-      navigation.navigate('Wallet');
-    } else if (screen === 'Settings') {
-      navigation.navigate('Settings');
-    } else if (screen === 'About') {
-      navigation.navigate('About');
-    } else {
-      console.log(`Navigate to ${screen}`);
-    }
-  };
-
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'LoginScreen' }],
-              });
-            } catch (error) {
-              console.error('Error signing out:', error);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const getUserName = () => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName} ${user.lastName}`;
@@ -144,190 +53,78 @@ export default function ProfileScreen({ navigation, route }: any) {
     return 'User';
   };
 
-  const getUserEmail = () => {
-    return user?.primaryEmailAddress?.emailAddress || '';
-  };
-
-  const getUserPhone = () => {
-    return user?.primaryPhoneNumber?.phoneNumber || '';
-  };
+  // Demo values for stats (replace with real data if available)
+  const totalRides = 47;
+  const totalEarnings = '₹2,340';
+  const rating = 4.8;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
-          <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-        </TouchableOpacity>
-      </Animated.View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Profile Info */}
-        <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.profileInfo}>
-            <View style={styles.profilePhotoContainer}>
-            <Image
-              source={{ uri: profilePhoto }}
-              style={styles.profilePhoto}
-            />
-              <View style={styles.onlineIndicator} />
-            </View>
-            <View style={styles.profileDetails}>
-              <Text style={styles.profileName}>{getUserName()}</Text>
-              {getUserEmail() && (
-                <Text style={styles.profileEmail}>{getUserEmail()}</Text>
-              )}
-              {getUserPhone() && (
-                <Text style={styles.profilePhone}>{getUserPhone()}</Text>
-              )}
-            </View>
-            <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EditProfile', {
-              name: getUserName(),
-              email: getUserEmail(),
-              phone: getUserPhone(),
-            })} activeOpacity={0.7}>
-              <Ionicons name="pencil" size={20} color={Colors.primary} />
-            </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>  
+          <View style={styles.profilePhotoContainer}>
+            <Image source={{ uri: getUserPhoto() }} style={styles.profilePhoto} />
           </View>
-
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>47</Text>
+          <Text style={styles.profileName}>{getUserName()}</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{totalRides}</Text>
               <Text style={styles.statLabel}>Total Rides</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>4.8</Text>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{totalEarnings}</Text>
+              <Text style={styles.statLabel}>Total Earnings</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{rating}</Text>
               <Text style={styles.statLabel}>Rating</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>₹2,340</Text>
-              <Text style={styles.statLabel}>Total Spent</Text>
+          </View>
+        </Animated.View>
+
+        <View style={styles.detailsCard}>
+          <Text style={styles.detailsTitle}>Personal Details</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Name:</Text>
+            <Text style={styles.detailValue}>{getUserName()}</Text>
+          </View>
+          {user?.primaryEmailAddress?.emailAddress && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Email:</Text>
+              <Text style={styles.detailValue}>{user.primaryEmailAddress.emailAddress}</Text>
             </View>
-          </View>
-        </Animated.View>
-
-        {user?.unsafeMetadata && (
-          <View style={{ backgroundColor: Colors.white, margin: Layout.spacing.lg, borderRadius: Layout.borderRadius.lg, padding: Layout.spacing.lg, marginTop: -8, marginBottom: Layout.spacing.lg }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: Colors.text, marginBottom: 12 }}>Your Details & Documents</Text>
-            {user.unsafeMetadata.email && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>Email: {user.unsafeMetadata.email}</Text>
-            )}
-            {user.unsafeMetadata.dob && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>DOB: {new Date(user.unsafeMetadata.dob).toLocaleDateString()}</Text>
-            )}
-            {user.unsafeMetadata.gender && (
-              <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 4 }}>Gender: {user.unsafeMetadata.gender}</Text>
-            )}
-            {/* Document Images */}
-            {user.unsafeMetadata.bikeFrontPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Bike Front:</Text>
-                <Image source={{ uri: user.unsafeMetadata.bikeFrontPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.bikeBackPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Bike Back:</Text>
-                <Image source={{ uri: user.unsafeMetadata.bikeBackPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.licensePhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>License:</Text>
-                <Image source={{ uri: user.unsafeMetadata.licensePhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.rcPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>RC:</Text>
-                <Image source={{ uri: user.unsafeMetadata.rcPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.aadharPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>Aadhar:</Text>
-                <Image source={{ uri: user.unsafeMetadata.aadharPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-            {user.unsafeMetadata.panPhoto && (
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, marginBottom: 2 }}>PAN:</Text>
-                <Image source={{ uri: user.unsafeMetadata.panPhoto }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#f7faff' }} />
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Quick Actions */}
-        <Animated.View style={[styles.quickActions, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionGrid}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('ScheduleRide')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="time" size={24} color={Colors.primary} />
-              </View>
-              <Text style={styles.actionText}>Schedule Ride</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('RideHistory')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.actionIcon}>
-                <Ionicons name="receipt" size={24} color={Colors.accent} />
-              </View>
-              <Text style={styles.actionText}>Ride History</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.getParent()?.navigate('Offers')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="gift" size={24} color={Colors.coral} />
-              </View>
-              <Text style={styles.actionText}>Offers</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('HelpSupport')} activeOpacity={0.7}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="help-circle" size={24} color={Colors.info} />
-              </View>
-              <Text style={styles.actionText}>Support</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* Menu Options */}
-        <Animated.View style={[styles.menuContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          {profileOptions.map((option, index) => (
-            <TouchableOpacity
-              key={option.id}
-              style={styles.menuItem}
-              onPress={() => handleOptionPress(option.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={styles.menuIconContainer}>
-                <Ionicons
-                  name={option.icon as any}
-                  size={24}
-                    color={Colors.primary}
-                />
-                </View>
-                <Text style={styles.menuItemText}>{option.title}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-            </TouchableOpacity>
-          ))}
-        </Animated.View>
-
-        {/* Logout */}
-        <Animated.View style={[styles.logoutContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={24} color={Colors.error} />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
-        </Animated.View>
+          )}
+          {user?.primaryPhoneNumber?.phoneNumber && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Phone:</Text>
+              <Text style={styles.detailValue}>{user.primaryPhoneNumber.phoneNumber}</Text>
+            </View>
+          )}
+          {user?.unsafeMetadata?.dob && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>DOB:</Text>
+              <Text style={styles.detailValue}>{new Date(user.unsafeMetadata.dob).toLocaleDateString()}</Text>
+            </View>
+          )}
+          {user?.unsafeMetadata?.gender && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Gender:</Text>
+              <Text style={styles.detailValue}>{user.unsafeMetadata.gender}</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
+      <View style={{ padding: 24 }}>
+        <TouchableOpacity
+          style={{ backgroundColor: '#FF3B30', borderRadius: 8, padding: 16, alignItems: 'center' }}
+          onPress={async () => {
+            await signOut();
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>Logout</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -337,216 +134,93 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  scrollContent: {
+    paddingVertical: Layout.spacing.xl,
     paddingHorizontal: Layout.spacing.lg,
-    paddingVertical: Layout.spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    alignItems: 'center',
   },
-  headerTitle: {
+  profileCard: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: Layout.borderRadius.xl,
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.xl,
+    paddingHorizontal: Layout.spacing.lg,
+    marginBottom: Layout.spacing.xl,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  profilePhotoContainer: {
+    marginBottom: Layout.spacing.md,
+  },
+  profilePhoto: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  profileName: {
     fontSize: Layout.fontSize.xl,
     fontWeight: 'bold',
     color: Colors.text,
+    marginBottom: Layout.spacing.md,
   },
-  notificationButton: {
-    padding: Layout.spacing.sm,
-  },
-  content: {
-    flex: 1,
-  },
-  profileCard: {
-    backgroundColor: Colors.white,
-    margin: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.lg,
-    padding: Layout.spacing.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  profileInfo: {
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Layout.spacing.lg,
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: Layout.spacing.md,
   },
-  profilePhotoContainer: {
-    position: 'relative',
-  },
-  profilePhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginRight: Layout.spacing.md,
-  },
-  onlineIndicator: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: Colors.white,
-    right: 0,
-    bottom: 0,
-  },
-  profileDetails: {
+  statBox: {
     flex: 1,
-  },
-  profileName: {
-    fontSize: Layout.fontSize.lg,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: Layout.spacing.xs,
-  },
-  profileEmail: {
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
-    marginBottom: Layout.spacing.xs,
-  },
-  profilePhone: {
-    fontSize: Layout.fontSize.sm,
-    color: Colors.textSecondary,
-  },
-  editButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: Layout.spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-  },
-  statItem: {
     alignItems: 'center',
   },
   statValue: {
     fontSize: Layout.fontSize.lg,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: Colors.primary,
   },
   statLabel: {
     fontSize: Layout.fontSize.sm,
     color: Colors.textSecondary,
-    marginTop: Layout.spacing.xs,
+    marginTop: 2,
   },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.borderLight,
-  },
-  quickActions: {
+  detailsCard: {
+    width: '100%',
     backgroundColor: Colors.white,
-    marginHorizontal: Layout.spacing.lg,
-    marginBottom: Layout.spacing.lg,
     borderRadius: Layout.borderRadius.lg,
     padding: Layout.spacing.lg,
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  sectionTitle: {
+  detailsTitle: {
     fontSize: Layout.fontSize.lg,
     fontWeight: 'bold',
     color: Colors.text,
     marginBottom: Layout.spacing.md,
   },
-  actionGrid: {
+  detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    alignItems: 'center',
-  },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gray50,
-    alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     marginBottom: Layout.spacing.sm,
   },
-  actionText: {
+  detailLabel: {
     fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
     fontWeight: '600',
+    width: 90,
+  },
+  detailValue: {
+    fontSize: Layout.fontSize.sm,
     color: Colors.text,
-  },
-  menuContainer: {
-    backgroundColor: Colors.white,
-    marginHorizontal: Layout.spacing.lg,
-    marginBottom: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Layout.spacing.lg,
-    paddingVertical: Layout.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-  },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Layout.spacing.md,
-  },
-  menuItemText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.text,
-    fontWeight: '500',
-  },
-  logoutContainer: {
-    backgroundColor: Colors.white,
-    marginHorizontal: Layout.spacing.lg,
-    marginBottom: Layout.spacing.lg,
-    borderRadius: Layout.borderRadius.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Layout.spacing.md,
-    paddingHorizontal: Layout.spacing.lg,
-  },
-  logoutText: {
-    fontSize: Layout.fontSize.md,
-    color: Colors.error,
-    fontWeight: '600',
-    marginLeft: Layout.spacing.sm,
+    textAlign: 'right',
   },
 });

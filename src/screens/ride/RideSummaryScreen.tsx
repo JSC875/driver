@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+import { useOnlineStatus } from '../../store/OnlineStatusContext';
 
 const feedbackTags = [
   'Great ride',
@@ -25,6 +26,7 @@ const feedbackTags = [
 
 export default function RideSummaryScreen({ navigation, route }: any) {
   const { destination, estimate, driver } = route.params;
+  const { setIsOnline } = useOnlineStatus();
   const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tip, setTip] = useState(0);
@@ -46,8 +48,9 @@ export default function RideSummaryScreen({ navigation, route }: any) {
   };
 
   const handleSubmitFeedback = () => {
-    // Submit feedback and navigate to home
-    navigation.navigate('Main');
+    // Set driver online before navigating home
+    setIsOnline(true);
+    navigation.navigate('Home');
   };
 
   const handleBookAnother = () => {
@@ -87,7 +90,7 @@ export default function RideSummaryScreen({ navigation, route }: any) {
               <View style={styles.destinationDot} />
               <View style={styles.routeDetails}>
                 <Text style={styles.routeLabel}>To</Text>
-                <Text style={styles.routeAddress}>{destination.name}</Text>
+                <Text style={styles.routeAddress}>{destination?.name || 'Destination'}</Text>
               </View>
             </View>
           </View>
@@ -108,20 +111,9 @@ export default function RideSummaryScreen({ navigation, route }: any) {
           </View>
         </View>
 
-        {/* Driver Rating */}
+        {/* Customer Rating */}
         <View style={styles.ratingCard}>
-          <Text style={styles.cardTitle}>Rate Your Driver</Text>
-          
-          <View style={styles.driverInfo}>
-            <Image source={{ uri: driver.photo }} style={styles.driverPhoto} />
-            <View style={styles.driverDetails}>
-              <Text style={styles.driverName}>{driver.name}</Text>
-              <Text style={styles.vehicleInfo}>
-                {driver.vehicleModel} • {driver.vehicleNumber}
-              </Text>
-            </View>
-          </View>
-
+          <Text style={styles.cardTitle}>Rate Your Customer</Text>
           <View style={styles.starsContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity
@@ -137,7 +129,6 @@ export default function RideSummaryScreen({ navigation, route }: any) {
               </TouchableOpacity>
             ))}
           </View>
-
           {rating > 0 && (
             <View style={styles.feedbackTags}>
               <Text style={styles.tagsTitle}>What went well?</Text>
@@ -165,62 +156,20 @@ export default function RideSummaryScreen({ navigation, route }: any) {
             </View>
           )}
         </View>
-
-        {/* Tip Driver */}
-        <View style={styles.tipCard}>
-          <Text style={styles.cardTitle}>Tip Your Driver</Text>
-          <Text style={styles.tipSubtitle}>
-            Show your appreciation for great service
-          </Text>
-          
-          <View style={styles.tipOptions}>
-            {[10, 20, 50].map((amount) => (
-              <TouchableOpacity
-                key={amount}
-                style={[
-                  styles.tipButton,
-                  tip === amount && styles.tipButtonSelected,
-                ]}
-                onPress={() => handleTip(amount)}
-              >
-                <Text
-                  style={[
-                    styles.tipText,
-                    tip === amount && styles.tipTextSelected,
-                  ]}
-                >
-                  ₹{amount}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
         {/* Payment Summary */}
         <View style={styles.paymentCard}>
           <Text style={styles.cardTitle}>Payment Summary</Text>
-          
           <View style={styles.paymentItem}>
             <Text style={styles.paymentLabel}>Ride Fare</Text>
             <Text style={styles.paymentValue}>₹{estimate.fare}</Text>
           </View>
-          
-          {tip > 0 && (
-            <View style={styles.paymentItem}>
-              <Text style={styles.paymentLabel}>Tip</Text>
-              <Text style={styles.paymentValue}>₹{tip}</Text>
-            </View>
-          )}
-          
           <View style={styles.paymentDivider} />
-          
           <View style={styles.paymentTotal}>
-            <Text style={styles.paymentTotalLabel}>Total Paid</Text>
-            <Text style={styles.paymentTotalValue}>₹{estimate.fare + tip}</Text>
+            <Text style={styles.paymentTotalLabel}>Total Received</Text>
+            <Text style={styles.paymentTotalValue}>₹{estimate.fare}</Text>
           </View>
         </View>
       </ScrollView>
-
       {/* Bottom Actions */}
       <View style={styles.bottomActions}>
         <Button
@@ -228,9 +177,6 @@ export default function RideSummaryScreen({ navigation, route }: any) {
           onPress={handleSubmitFeedback}
           style={styles.submitButton}
         />
-        <TouchableOpacity style={styles.bookAnotherButton} onPress={handleBookAnother}>
-          <Text style={styles.bookAnotherText}>Book Another Ride</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
