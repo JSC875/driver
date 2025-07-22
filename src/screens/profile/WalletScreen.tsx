@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  FlatList,
   Animated,
   Dimensions,
 } from 'react-native';
@@ -229,12 +228,9 @@ export default function WalletScreen({ navigation }: any) {
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
-              <FlatList
-                data={walletTransactions}
-                renderItem={renderTransaction}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
+              <View>
+                {walletTransactions.map((item) => renderTransaction({ item }))}
+              </View>
             </Animated.View>
           </>
         ) : (
@@ -248,12 +244,9 @@ export default function WalletScreen({ navigation }: any) {
                   <Text style={styles.addPaymentText}>Add</Text>
                 </TouchableOpacity>
               </View>
-              <FlatList
-                data={mockPaymentMethods}
-                renderItem={renderPaymentMethod}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-              />
+              <View>
+                {mockPaymentMethods.map((item) => renderPaymentMethod({ item }))}
+              </View>
             </View>
 
             {/* Payment Settings */}

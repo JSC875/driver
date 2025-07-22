@@ -21,6 +21,11 @@ import { useUserFromJWT } from '../../utils/jwtDecoder';
 
 const { width, height } = Dimensions.get('window');
 
+// Add at the top, after imports
+function goToHome(navigation: any) {
+  navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+}
+
 function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
   const [selectedReason, setSelectedReason] = useState<string>('');
   const anim = useRef(new Animated.Value(0)).current;
@@ -228,7 +233,8 @@ async function geocodeAddress(address: string, apiKey: string) {
     throw new Error('No geocoding results found');
   } catch (error) {
     console.error('Geocoding error:', error);
-    throw new Error('Geocoding failed: ' + error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error('Geocoding failed: ' + errorMessage);
   }
 }
 
@@ -240,7 +246,7 @@ async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, ln
     const data = await res.json();
     
     // Log the response for debugging
-    console.log('Directions response:', data);
+    console.log('Directions API response:', data);
     
     if (data.status === 'REQUEST_DENIED') {
       console.error('Google Maps API key error:', data.error_message);
@@ -254,14 +260,19 @@ async function fetchRoute(from: {lat: number, lng: number}, to: {lat: number, ln
     
     if (data.routes && data.routes[0]) {
       const points = Polyline.decode(data.routes[0].overview_polyline.points);
-      return points.map(([latitude, longitude]: [number, number]) => ({ latitude, longitude }));
+      const polyline = points.map(([latitude, longitude]: [number, number]) => ({ latitude, longitude }));
+      const leg = data.routes[0].legs[0];
+      const distance = leg?.distance?.text || '';
+      const duration = leg?.duration?.text || '';
+      return { polyline, distance, duration };
     }
     
     console.error('No routes found');
     throw new Error('No routes found');
   } catch (error) {
     console.error('Directions fetch error:', error);
-    throw new Error('Directions fetch failed: ' + error.message);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error('Directions fetch failed: ' + errorMessage);
   }
 }
 
@@ -273,743 +284,6 @@ const getFallbackCoordinates = (address: string) => {
   // Return default coordinates for Hyderabad if geocoding fails
   return { lat: 17.4375, lng: 78.4483 };
 };
-
-function NavigationScreen({ ride, onNavigate, onArrived, onClose }: { ride: RideRequest, onNavigate: () => void, onArrived: () => void, onClose: () => void }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
-  const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
-  const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
-  const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
-  const [isLocationReady, setIsLocationReady] = useState(false);
-  const mapRef = useRef<MapView>(null); // Typed ref for MapView
-  const pickupPulse = useRef(new Animated.Value(1)).current;
-  const pickupBgOpacity = useRef(new Animated.Value(0.5)).current;
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
-
-  // Start location tracking
-  useEffect(() => {
-    const startLocationTracking = async () => {
-      try {
-        // Request location permissions
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Location permission denied');
-          setIsLocationReady(true); // Mark as ready even if denied
-          return;
-        }
-
-        // Get initial location
-        const initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-        setDriverLocation({
-          latitude: initialLocation.coords.latitude,
-          longitude: initialLocation.coords.longitude,
-        });
-        setIsLocationReady(true);
-
-        // Start watching location
-        locationSubscription.current = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000, // Update every 5 seconds
-            distanceInterval: 10, // Update every 10 meters
-          },
-          (location) => {
-            setDriverLocation({
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            });
-          }
-        );
-      } catch (error) {
-        console.error('Error starting location tracking:', error);
-        setIsLocationReady(true); // Mark as ready even if error
-      }
-    };
-
-    startLocationTracking();
-
-    // Cleanup location subscription
-    return () => {
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
-        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
-        setPickupCoord(pickup);
-        setDropoffCoord(dropoff);
-        
-        // Wait for location to be ready before calculating route
-        if (isLocationReady) {
-          // Always prioritize driver location to pickup route
-          if (driverLocation) {
-            const route = await fetchRoute(
-              { lat: driverLocation.latitude, lng: driverLocation.longitude },
-              pickup,
-              GOOGLE_MAPS_API_KEY
-            );
-            setRouteCoords(route);
-          } else {
-            // Only fallback to pickup-to-dropoff if no driver location at all
-            const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-            setRouteCoords(route);
-          }
-        }
-      } catch (e) {
-        console.error('Error fetching route:', e);
-        // Use fallback coordinates when geocoding fails
-        const fallbackPickup = getFallbackCoordinates(ride.pickupAddress);
-        const fallbackDropoff = getFallbackCoordinates(ride.dropoffAddress);
-        
-        setPickupCoord(fallbackPickup);
-        setDropoffCoord(fallbackDropoff);
-        
-        console.log('Using fallback coordinates due to geocoding error');
-        // Don't let geocoding errors prevent the ride acceptance
-        // Just show a basic map without route
-        Alert.alert(
-          'Map Loading Error', 
-          'Unable to load route details, but ride acceptance was successful. You can still navigate manually.',
-          [{ text: 'OK' }]
-        );
-      }
-    })();
-  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation, isLocationReady]);
-
-  useEffect(() => {
-    if (routeCoords.length > 1 && mapRef.current) {
-      mapRef.current.fitToCoordinates(routeCoords, { edgePadding: { top: 100, right: 100, bottom: 100, left: 100 }, animated: true });
-    }
-  }, [routeCoords]);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(pickupPulse, { toValue: 1.04, duration: 600, useNativeDriver: true }),
-          Animated.timing(pickupPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(pickupBgOpacity, { toValue: 1, duration: 600, useNativeDriver: false }),
-          Animated.timing(pickupBgOpacity, { toValue: 0.5, duration: 600, useNativeDriver: false }),
-        ]),
-      ])
-    ).start();
-  }, []);
-
-  React.useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 350,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-  return (
-    <Animated.View style={{
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: '#fff',
-      opacity: anim,
-      zIndex: 9999,
-    }}>
-      {/* Full Screen Map */}
-      <MapView
-        ref={mapRef}
-        provider="google"
-        style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-        }}
-        initialRegion={{
-          latitude: pickupCoord?.lat || 17.4375,
-          longitude: pickupCoord?.lng || 78.4483,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        showsUserLocation
-      >
-        {pickupCoord && (
-          <Marker 
-            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
-            title="Pickup"
-            pinColor="#00C853"
-          />
-        )}
-        {dropoffCoord && (
-          <Marker 
-            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
-            title="Dropoff"
-            pinColor="#FF6B35"
-          />
-        )}
-        {routeCoords.length > 1 && (
-          <MapPolyline 
-            coordinates={routeCoords} 
-            strokeWidth={4} 
-            strokeColor="#1877f2"
-            zIndex={1}
-          />
-        )}
-        {driverLocation && (
-          <Marker
-            coordinate={driverLocation}
-            title="You"
-            pinColor="#1877f2"
-          />
-        )}
-      </MapView>
-      
-      {/* Highlighted Route Info & Pickup/Dropoff Card */}
-      <View style={{
-        position: 'absolute',
-        top: insets.top + 16,
-        left: 16,
-        right: 16,
-        // Use a soft blue-green background for the whole card
-        backgroundColor: '#e0f7fa', // light blue-green (cyan)
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 6,
-      }}>
-        {/* Top Bar with Route Info - No Close Icon */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: 12,
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-        }}>
-          {/* Remove the close button here */}
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Navigate to Pickup</Text>
-            <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>ETA: {ride.pickup}</Text>
-          </View>
-          {/* Small Cancel Button */}
-        <TouchableOpacity
-          style={{ 
-              backgroundColor: '#ff4444',
-              borderRadius: 12,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-          }}
-            onPress={onClose}
-            activeOpacity={0.7}
-          >
-            <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Cancel</Text>
-        </TouchableOpacity>
-          </View>
-        {/* Animated Pickup/Dropoff Cards - blend into card, no separate backgrounds */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Pickup (Animated) */}
-          <Animated.View style={{ flex: 1, opacity: pickupBgOpacity }}>
-            <Animated.View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#00e676', // static, bright green
-              borderRadius: 16,
-              marginRight: 12,
-              padding: 8,
-              transform: [{ scale: pickupPulse }],
-            }}>
-              <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Ionicons name="location" size={16} color="#fff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Pickup</Text>
-                <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
-          {/* Arrow */}
-          <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
-          </View>
-          {/* Dropoff (Static) */}
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Ionicons name="flag" size={16} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
-              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Bottom Action Buttons */}
-      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
-        <View style={{ gap: 12, paddingHorizontal: 20 }}>
-          <TouchableOpacity
-            style={{ 
-              backgroundColor: '#1877f2', 
-              borderRadius: 16, 
-              paddingVertical: 18, 
-              paddingHorizontal: 32, 
-              width: '100%', 
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              shadowColor: '#1877f2',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-        onPress={onNavigate}
-            activeOpacity={0.8}
-      >
-            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-            style={{ 
-              backgroundColor: '#00C853', 
-              borderRadius: 16, 
-              paddingVertical: 18, 
-              paddingHorizontal: 32, 
-              width: '100%', 
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              shadowColor: '#00C853',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-        onPress={onArrived}
-            activeOpacity={0.8}
-      >
-            <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Arrived at Pickup</Text>
-      </TouchableOpacity>
-    </View>
-      </SafeAreaView>
-    </Animated.View>
-  );
-}
-
-function OtpScreen({ onSubmit, onClose }: { onSubmit: (otp: string) => void, onClose: () => void }) {
-  const [otp, setOtp] = useState(['', '', '', '']);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
-  const anim = React.useRef(new Animated.Value(0)).current;
-  const checkAnim = React.useRef(new Animated.Value(0)).current;
-  const inputRefs = useRef<Array<TextInput | null>>([]);
-
-  React.useEffect(() => {
-    Animated.spring(anim, {
-      toValue: 1,
-      friction: 7,
-      tension: 60,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const handleChange = (val: string, idx: number) => {
-    if (!/^[0-9]?$/.test(val)) return;
-    const newOtp = [...otp];
-    newOtp[idx] = val;
-    setOtp(newOtp);
-    if (val && idx < 3) {
-      inputRefs.current[idx + 1]?.focus();
-      setFocusedIndex(idx + 1);
-    }
-    if (!val && idx > 0) {
-      setFocusedIndex(idx - 1);
-    }
-  };
-
-  const handleKeyPress = (e: any, idx: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[idx] && idx > 0) {
-      inputRefs.current[idx - 1]?.focus();
-      setFocusedIndex(idx - 1);
-    }
-  };
-
-  const handleSubmit = () => {
-    setSubmitted(true);
-    Animated.sequence([
-      Animated.timing(checkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.delay(600),
-    ]).start(() => {
-      onSubmit(otp.join(''));
-      setSubmitted(false);
-      checkAnim.setValue(0);
-    });
-  };
-
-  return (
-    <Animated.View style={{
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      justifyContent: 'center', alignItems: 'center',
-      backgroundColor: anim.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)'] }),
-      opacity: anim,
-      zIndex: 9999,
-    }}>
-      <Animated.View style={{
-        width: width - 32,
-        backgroundColor: 'rgba(255,255,255,0.98)',
-        borderRadius: 28,
-        padding: 36,
-        elevation: 24,
-        shadowColor: '#000',
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 15 },
-        alignItems: 'center',
-        transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }],
-      }}>
-        <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
-          <Ionicons name="close" size={26} color="#888" />
-        </TouchableOpacity>
-        <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: '#1877f2', letterSpacing: 1 }}>Enter OTP</Text>
-        <Text style={{ fontSize: 17, marginBottom: 28, color: '#444', textAlign: 'center' }}>Enter the 4-digit code to start your ride</Text>
-        <View style={{ flexDirection: 'row', marginBottom: 32, gap: 8 }}>
-          {otp.map((digit, idx) => (
-        <TextInput
-              key={idx}
-              ref={(ref) => { inputRefs.current[idx] = ref; }}
-              style={{
-                width: 44,
-                height: 54,
-                borderRadius: 12,
-                borderWidth: 2,
-                borderColor: focusedIndex === idx ? '#1877f2' : '#e0e0e0',
-                backgroundColor: '#f7faff',
-                fontSize: 28,
-                color: '#222',
-                textAlign: 'center',
-                marginHorizontal: 2,
-                shadowColor: focusedIndex === idx ? '#1877f2' : 'transparent',
-                shadowOpacity: focusedIndex === idx ? 0.15 : 0,
-                shadowRadius: 6,
-                elevation: focusedIndex === idx ? 4 : 0,
-              }}
-          keyboardType="number-pad"
-              maxLength={1}
-              value={digit}
-              onFocus={() => setFocusedIndex(idx)}
-              onChangeText={val => handleChange(val, idx)}
-              onKeyPress={e => handleKeyPress(e, idx)}
-              returnKeyType="done"
-              autoFocus={idx === 0}
-        />
-          ))}
-      </View>
-      <TouchableOpacity
-          style={{ backgroundColor: otp.every(d => d) ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 8 }}
-          onPress={handleSubmit}
-          disabled={!otp.every(d => d)}
-          activeOpacity={otp.every(d => d) ? 0.8 : 1}
-      >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>Submit OTP</Text>
-      </TouchableOpacity>
-        {submitted && (
-          <Animated.View style={{ marginTop: 18, opacity: checkAnim, transform: [{ scale: checkAnim }] }}>
-            <Ionicons name="checkmark-circle" size={48} color="#22C55E" />
-          </Animated.View>
-        )}
-      </Animated.View>
-    </Animated.View>
-  );
-}
-
-
-
-function RideInProgressScreen({ ride, onNavigate, onEnd, onClose, navigation }: { ride: RideRequest, onNavigate: () => void, onEnd: () => void, onClose: () => void, navigation: any }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
-  const [routeCoords, setRouteCoords] = useState<Array<{latitude: number, longitude: number}>>([]);
-  const [pickupCoord, setPickupCoord] = useState<{lat: number, lng: number} | null>(null);
-  const [dropoffCoord, setDropoffCoord] = useState<{lat: number, lng: number} | null>(null);
-  const mapRef = useRef<MapView>(null); // Typed ref for MapView
-  const dropoffPulse = useRef(new Animated.Value(1)).current;
-  const dropoffBgOpacity = useRef(new Animated.Value(0.5)).current;
-  const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
-
-  // Start location tracking
-  useEffect(() => {
-    const startLocationTracking = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Location permission denied');
-          return;
-        }
-        const initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-        setDriverLocation({
-          latitude: initialLocation.coords.latitude,
-          longitude: initialLocation.coords.longitude,
-        });
-        locationSubscription.current = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High,
-            timeInterval: 5000,
-            distanceInterval: 10,
-          },
-          (location) => {
-            setDriverLocation({
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            });
-          }
-        );
-      } catch (error) {
-        console.error('Error starting location tracking:', error);
-      }
-    };
-    startLocationTracking();
-    return () => {
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const pickup = await geocodeAddress(ride.pickupAddress, GOOGLE_MAPS_API_KEY);
-        const dropoff = await geocodeAddress(ride.dropoffAddress, GOOGLE_MAPS_API_KEY);
-        setPickupCoord(pickup);
-        setDropoffCoord(dropoff);
-        // Route from driver location to dropoff
-        if (driverLocation) {
-          const route = await fetchRoute(
-            { lat: driverLocation.latitude, lng: driverLocation.longitude },
-            dropoff,
-            GOOGLE_MAPS_API_KEY
-          );
-          setRouteCoords(route);
-        } else {
-          // Fallback to pickup to dropoff
-          const route = await fetchRoute(pickup, dropoff, GOOGLE_MAPS_API_KEY);
-          setRouteCoords(route);
-        }
-      } catch (e) {
-        console.error('Error fetching route:', e);
-      }
-    })();
-  }, [ride.pickupAddress, ride.dropoffAddress, driverLocation]);
-
-  useEffect(() => {
-    if (routeCoords.length > 1 && mapRef.current) {
-      mapRef.current.fitToCoordinates(routeCoords, { edgePadding: { top: 100, right: 100, bottom: 100, left: 100 }, animated: true });
-    }
-  }, [routeCoords]);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(dropoffPulse, { toValue: 1.04, duration: 600, useNativeDriver: true }),
-          Animated.timing(dropoffPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(dropoffBgOpacity, { toValue: 1, duration: 600, useNativeDriver: false }),
-          Animated.timing(dropoffBgOpacity, { toValue: 0.5, duration: 600, useNativeDriver: false }),
-        ]),
-      ])
-    ).start();
-  }, []);
-
-  React.useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 350,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-  return (
-    <Animated.View style={{
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: '#fff',
-      opacity: anim,
-      zIndex: 9999,
-    }}>
-      {/* Full Screen Map */}
-      <MapView
-        ref={mapRef}
-        provider="google"
-        style={{
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-        }}
-        initialRegion={{
-          latitude: pickupCoord?.lat || 17.4375,
-          longitude: pickupCoord?.lng || 78.4483,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-        showsUserLocation
-      >
-        {pickupCoord && (
-          <Marker 
-            coordinate={{ latitude: pickupCoord.lat, longitude: pickupCoord.lng }} 
-            title="Pickup"
-            pinColor="#00C853"
-          />
-        )}
-        {dropoffCoord && (
-          <Marker 
-            coordinate={{ latitude: dropoffCoord.lat, longitude: dropoffCoord.lng }} 
-            title="Dropoff"
-            pinColor="#FF6B35"
-          />
-        )}
-        {routeCoords.length > 1 && (
-          <MapPolyline 
-            coordinates={routeCoords} 
-            strokeWidth={4} 
-            strokeColor="#1877f2"
-            zIndex={1}
-          />
-        )}
-        {driverLocation && (
-          <Marker
-            coordinate={driverLocation}
-            title="You"
-            pinColor="#1877f2"
-          />
-        )}
-      </MapView>
-      
-      {/* Top Card with Route Info & Pickup/Dropoff */}
-      <View style={{
-        position: 'absolute',
-        top: 56,
-        left: 16,
-        right: 16,
-        backgroundColor: '#e0f7fa', // match NavigationScreen
-        borderRadius: 20,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 6,
-      }}>
-        {/* Route Header */}
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', textAlign: 'center' }}>Ride in Progress</Text>
-          <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginTop: 4 }}>Trip: {ride.dropoff}</Text>
-        </View>
-        {/* Route Information */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Pickup (plain, not highlighted) */}
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 12, backgroundColor: 'transparent', borderRadius: 16, padding: 8 }}>
-            <View style={{ backgroundColor: '#e0e0e0', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Ionicons name="checkmark" size={16} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Pickup Complete</Text>
-              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
-            </View>
-          </View>
-          {/* Arrow */}
-          <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
-          </View>
-          {/* Dropoff (Animated, lighter highlight) */}
-          <Animated.View style={{ flex: 1, opacity: dropoffBgOpacity }}>
-            <Animated.View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: '#ffe0b2', // lighter orange
-              borderRadius: 16,
-              padding: 8,
-              transform: [{ scale: dropoffPulse }],
-              shadowColor: '#FF6B35',
-              shadowOpacity: 0.5,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 8,
-            }}>
-              <View style={{ backgroundColor: '#ffb74d', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Ionicons name="flag" size={16} color="#fff" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
-                <Text style={{ fontSize: 13, color: '#222', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </View>
-      </View>
-
-      {/* Bottom Action Buttons */}
-      <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }} edges={['bottom']}>
-        <View style={{ gap: 12 }}>
-          <TouchableOpacity
-            style={{ 
-              backgroundColor: '#1877f2', 
-              borderRadius: 16, 
-              paddingVertical: 18, 
-              paddingHorizontal: 32, 
-              width: '100%', 
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              shadowColor: '#1877f2',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-        onPress={onNavigate}
-            activeOpacity={0.8}
-      >
-            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
-      </TouchableOpacity>
-          
-      <TouchableOpacity
-            style={{ 
-              backgroundColor: '#FF3B30', 
-              borderRadius: 16, 
-              paddingVertical: 18, 
-              paddingHorizontal: 32, 
-              width: '100%', 
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              shadowColor: '#FF3B30',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-            }}
-        onPress={() => navigation.navigate('EndRide', { ride })}
-            activeOpacity={0.8}
-      >
-            <Ionicons name="stop-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>End Ride</Text>
-      </TouchableOpacity>
-    </View>
-      </SafeAreaView>
-
-    </Animated.View>
-  );
-}
 
 const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { visible: boolean; onClose: () => void; onNavigate: (screen: string) => void; halfScreen?: boolean; onLogout: () => void }) => {
   return (
@@ -1084,11 +358,14 @@ export default function HomeScreen() {
     setIsOnline, 
     isSocketConnected, 
     currentRideRequest, 
+    acceptedRideDetails,
     acceptRide, 
     rejectRide,
     sendLocationUpdate,
     sendRideStatusUpdate,
     sendDriverStatus,
+    completeRide,
+    resetDriverStatus,
     connectionStatus,
     driverId,
     userType
@@ -1101,9 +378,6 @@ export default function HomeScreen() {
   const SWIPE_THRESHOLD = SWIPE_WIDTH * 0.6;
   const lastHaptic = useRef(Date.now());
   const [rideRequest, setRideRequest] = useState<RideRequest | null>(null);
-  const [navigationRide, setNavigationRide] = useState<RideRequest | null>(null);
-  const [showOtp, setShowOtp] = useState(false);
-  const [rideInProgress, setRideInProgress] = useState<RideRequest | null>(null);
   const sosAnim = useRef(new Animated.Value(1)).current;
   const [menuVisible, setMenuVisible] = useState(false);
   const insets = useSafeAreaInsets();
@@ -1116,6 +390,21 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const [isLocating, setIsLocating] = useState(false);
   const { addRide } = useRideHistory();
+
+  // Helper functions for driver status display
+  const getDriverStatusColor = () => {
+    if (!isSocketConnected) return '#FF3B30'; // Red for disconnected
+    if (acceptedRideDetails) return '#FF9500'; // Orange for busy/on ride
+    if (currentRideRequest) return '#007AFF'; // Blue for considering ride
+    return '#00C853'; // Green for available
+  };
+
+  const getDriverStatusText = () => {
+    if (!isSocketConnected) return 'OFFLINE';
+    if (acceptedRideDetails) return 'ON RIDE';
+    if (currentRideRequest) return 'CONSIDERING';
+    return 'AVAILABLE';
+  };
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1267,7 +556,7 @@ export default function HomeScreen() {
               useNativeDriver: false,
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            navigation.navigate('Home');
+            goToHome(navigation);
           });
         } else {
           Animated.spring(offlineSwipeX, {
@@ -1315,23 +604,15 @@ export default function HomeScreen() {
     }).start();
   };
 
-  const handleTestRideRequest = () => {
-    setRideRequest({
-      id: '1',
-      price: '₹120.00',
-      type: 'Mini',
-      tag: 'Hyderabad',
-      rating: '4.95',
-      verified: true,
-      pickup: '5 min (2.1 km) away',
-      pickupAddress: 'Hitech City, Hyderabad, Telangana',
-      dropoff: '25 min (12.3 km) trip',
-      dropoffAddress: 'Charminar, Hyderabad, Telangana',
-    });
-  };
+
 
   const handleAcceptRide = () => {
-    if (rideRequest) {
+    if (rideRequest && currentRideRequest) {
+      console.log('✅ Accepting ride:', currentRideRequest);
+      
+      // Send acceptance to socket server (this will also set driver status as busy)
+      acceptRide(currentRideRequest);
+      
       // Save to ride history as accepted
       addRide({
         id: rideRequest.id + '-' + Date.now(),
@@ -1347,20 +628,11 @@ export default function HomeScreen() {
         rating: 0,
       });
       
-      // Send acceptance to socket server using new enhanced method
-      if (currentRideRequest) {
-        console.log('✅ Accepting ride via socket:', currentRideRequest);
-        acceptRide(currentRideRequest);
-        
-        // Send driver status as busy
-        sendDriverStatus({
-          driverId: 'driver_001',
-          status: 'busy'
-        });
-      }
-      
-      setNavigationRide(rideRequest);
+      // Don't navigate immediately - wait for acceptedRideDetails to be set
+      // The navigation will happen in the useEffect below when acceptedRideDetails is available
       setRideRequest(null);
+    } else {
+      console.error('❌ Cannot accept ride: missing rideRequest or currentRideRequest');
     }
   };
 
@@ -1382,101 +654,10 @@ export default function HomeScreen() {
       
       console.log('❌ Rejecting ride via socket:', currentRideRequest);
       rejectRide(currentRideRequest);
+      
+
     }
     setRideRequest(null);
-  };
-
-  const handleNavigate = () => {
-    if (navigationRide) {
-      // Use detailed location if available, otherwise fall back to address
-      const pickupLocation = navigationRide.pickupDetails;
-      const address = encodeURIComponent(
-        pickupLocation?.address || 
-        pickupLocation?.name || 
-        navigationRide.pickupAddress
-      );
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-      Linking.openURL(url);
-    }
-  };
-
-  const handleArrived = () => {
-    // Send arrived status to socket server
-    if (navigationRide) {
-      sendRideStatusUpdate({
-        rideId: navigationRide.id,
-        status: 'arrived',
-        userId: 'user123', // This should come from the ride data
-        message: 'Driver has arrived at pickup location'
-      });
-    }
-    setShowOtp(true);
-  };
-
-  const handleOtpSubmit = (otp: string) => {
-    setShowOtp(false);
-    setRideInProgress(navigationRide);
-    setNavigationRide(null);
-    
-    // Send ride started status to socket server
-    if (navigationRide) {
-      sendRideStatusUpdate({
-        rideId: navigationRide.id,
-        status: 'started',
-        userId: 'user123', // This should come from the ride data
-        message: 'Ride has started'
-      });
-    }
-    
-    Alert.alert('OTP Verified', 'You can now start the ride!');
-  };
-
-  const handleNavigateToDropoff = () => {
-    if (rideInProgress) {
-      // Use detailed location if available, otherwise fall back to address
-      const dropoffLocation = rideInProgress.dropoffDetails;
-      const address = encodeURIComponent(
-        dropoffLocation?.address || 
-        dropoffLocation?.name || 
-        rideInProgress.dropoffAddress
-      );
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-      Linking.openURL(url);
-    }
-  };
-
-  const handleEndRide = () => {
-    if (rideInProgress) {
-      addRide({
-        id: rideInProgress.id + '-' + Date.now(),
-        date: new Date().toISOString().slice(0, 10),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        from: rideInProgress.pickupAddress || '',
-        to: rideInProgress.dropoffAddress || '',
-        driver: user?.fullName || 'You',
-        fare: Number(String(rideInProgress.price).replace(/[^\d.]/g, '')) || 0,
-        distance: 0,
-        duration: 0,
-        status: 'completed',
-        rating: 5,
-      });
-      
-      // Send ride completion to socket server
-      sendRideStatusUpdate({
-        rideId: rideInProgress.id,
-        status: 'completed',
-        userId: 'user123', // This should come from the ride data
-        message: 'Ride completed successfully'
-      });
-      
-      // Send driver status back to online
-      sendDriverStatus({
-        driverId: 'driver_001',
-        status: 'online'
-      });
-      
-      navigation.navigate('EndRide', { ride: rideInProgress });
-    }
   };
 
   const handleCancelRide = (ride: RideRequest) => {
@@ -1486,6 +667,23 @@ export default function HomeScreen() {
 
   const handleConfirmCancelRide = (reason: string) => {
     if (currentRideToCancel) {
+      // Get the current ride details from acceptedRideDetails or rideRequest
+      const rideToCancel = acceptedRideDetails || currentRideRequest;
+      
+      if (rideToCancel) {
+        // Cancel ride via socket
+        socketManager.cancelRide({
+          rideId: rideToCancel.rideId,
+          driverId: user?.id || 'driver123',
+          reason: reason
+        });
+        
+        console.log('🚫 Driver cancelling ride:', {
+          rideId: rideToCancel.rideId,
+          reason: reason
+        });
+      }
+
       // Add to ride history with cancellation reason
       addRide({
         id: currentRideToCancel.id + '-' + Date.now(),
@@ -1505,19 +703,21 @@ export default function HomeScreen() {
       setCancelModalVisible(false);
       setCurrentRideToCancel(null);
       
-      // Close navigation screen if it's open
-      if (navigationRide?.id === currentRideToCancel.id) {
-        setNavigationRide(null);
-      }
-      
-      // Close ride in progress if it's open
-      if (rideInProgress?.id === currentRideToCancel.id) {
-        setRideInProgress(null);
-      }
+      // Note: Navigation will be handled by the driver_cancellation_success event
+      // in the OnlineStatusContext
     }
   };
 
-  const isRideActive = !!(rideRequest || navigationRide || showOtp || rideInProgress);
+  const handleRideCompleted = (rideId: string) => {
+    // Complete the ride on the server
+    completeRide(rideId);
+    
+    // Reset driver status when ride is completed
+    resetDriverStatus();
+    console.log('✅ Ride completed, driver status reset to available');
+  };
+
+  const isRideActive = !!(rideRequest);
 
   // Play haptic feedback on ride request
   useEffect(() => {
@@ -1534,88 +734,127 @@ export default function HomeScreen() {
 
   // Handle incoming ride requests from socket
   useEffect(() => {
-    if (currentRideRequest && isOnline) {
-      console.log('🚗 New ride request received from socket:', currentRideRequest);
-      
-      // Convert socket ride request to local format
-      const localRideRequest: RideRequest = {
-        id: currentRideRequest.rideId,
-        price: `₹${currentRideRequest.price}`,
-        type: currentRideRequest.rideType || 'Mini',
-        tag: 'Hyderabad',
-        rating: '4.95',
-        verified: true,
-        pickup: '5 min (2.1 km) away',
-        pickupAddress: currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location',
-        dropoff: '25 min (12.3 km) trip',
-        dropoffAddress: currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location',
-        // Store detailed location information for navigation
-        pickupDetails: currentRideRequest.pickup,
-        dropoffDetails: currentRideRequest.drop,
-      };
-      
-      setRideRequest(localRideRequest);
-      
-      // Play haptic feedback for new ride request
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    let isMounted = true;
+    async function setRideWithRoute() {
+      if (currentRideRequest && isOnline) {
+        // Log pickup and dropoff details for debugging
+        console.log('✅ New ride request received:', currentRideRequest.rideId);
+        console.log('Pickup details received:', currentRideRequest.pickup);
+        console.log('Dropoff details received:', currentRideRequest.drop);
+        // Get coordinates
+        const pickupCoords = currentRideRequest.pickup;
+        const dropoffCoords = currentRideRequest.drop;
+        let pickup = '...';
+        let dropoff = '...';
+        try {
+          if (pickupCoords && dropoffCoords && pickupCoords.latitude && pickupCoords.longitude && dropoffCoords.latitude && dropoffCoords.longitude) {
+            const route = await fetchRoute(
+              { lat: pickupCoords.latitude, lng: pickupCoords.longitude },
+              { lat: dropoffCoords.latitude, lng: dropoffCoords.longitude },
+              GOOGLE_MAPS_API_KEY
+            );
+            pickup = `${route.duration} (${route.distance}) away`;
+            dropoff = `${route.duration} (${route.distance}) trip`;
+          } else {
+            pickup = currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location';
+            dropoff = currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location';
+          }
+        } catch (e) {
+          console.error('Failed to fetch real route info:', e);
+          pickup = currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location';
+          dropoff = currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location';
+        }
+        // Convert socket ride request to local format
+        const localRideRequest: RideRequest = {
+          id: currentRideRequest.rideId,
+          price: `₹${currentRideRequest.price}`,
+          type: currentRideRequest.rideType || 'Mini',
+          tag: 'Hyderabad',
+          rating: '4.95',
+          verified: true,
+          pickup,
+          pickupAddress: currentRideRequest.pickup.address || currentRideRequest.pickup.name || 'Pickup Location',
+          dropoff,
+          dropoffAddress: currentRideRequest.drop.address || currentRideRequest.drop.name || 'Drop Location',
+          // Store detailed location information for navigation
+          pickupDetails: currentRideRequest.pickup,
+          dropoffDetails: currentRideRequest.drop,
+        };
+        // Log what will be used for the map
+        console.log('pickupDetails for map:', localRideRequest.pickupDetails);
+        console.log('dropoffDetails for map:', localRideRequest.dropoffDetails);
+        if (isMounted) {
+          setRideRequest(localRideRequest);
+          // Play haptic feedback for new ride request
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
     }
+    setRideWithRoute();
+    return () => { isMounted = false; };
   }, [currentRideRequest, isOnline]);
 
-  // Fetch custom Clerk JWT after login
-  useEffect(() => {
-    if (user?.unsafeMetadata?.type !== 'driver') return;
-    const fetchCustomJWT = async () => {
-      try {
-        const customToken = await getToken({ template: 'driver_app_token' });
-        console.log('Custom Clerk JWT:', customToken);
-        // Optionally: send to backend or store in state
-      } catch (err) {
-        console.error('Failed to fetch custom JWT:', err);
-      }
-    };
-    fetchCustomJWT();
-  }, [getToken, user]);
 
-  // Button handler to fetch and log the custom JWT manually
-  const handleFetchCustomJWT = async () => {
-    if (user?.unsafeMetadata?.type !== 'driver') {
-      Alert.alert('Error', 'User type is not set to driver.');
-      return;
-    }
-    try {
-      const manualToken = await getToken({ template: 'driver_app_token' });
-      console.log('Custom Clerk JWT:', manualToken);
-      Alert.alert('Custom Clerk JWT', manualToken ? 'Token fetched and logged to console.' : 'No token received.');
-    } catch (err) {
-      console.error('Failed to fetch custom JWT:', err);
-      Alert.alert('Error', 'Failed to fetch custom JWT.');
-    }
-  };
+
+
 
   // Add logout handler
   const handleLogout = async () => {
     await signOut();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+    goToHome(navigation);
   };
 
-  // Function to display JWT user information
-  const handleDisplayJWTInfo = async () => {
-    try {
-      const userInfo = await getUserInfo();
-      if (userInfo) {
-        Alert.alert(
-          'JWT User Information',
-          `User ID: ${userInfo.userId}\nUser Type: ${userInfo.userType}\nEmail: ${userInfo.email || 'N/A'}\nName: ${userInfo.name || 'N/A'}`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('Error', 'Could not retrieve user information from JWT');
-      }
-    } catch (error) {
-      console.error('Error displaying JWT info:', error);
-      Alert.alert('Error', 'Failed to get user information from JWT');
+
+
+  useEffect(() => {
+    if (acceptedRideDetails) {
+      // Convert acceptedRideDetails to local RideRequest format
+      const localRideRequest: RideRequest = {
+        id: acceptedRideDetails.rideId,
+        price: `₹${acceptedRideDetails.price}`,
+        type: acceptedRideDetails.rideType || 'Mini',
+        tag: 'Hyderabad',
+        rating: '4.95',
+        verified: true,
+        pickup: '5 min (2.1 km) away',
+        pickupAddress: acceptedRideDetails.pickup.address || acceptedRideDetails.pickup.name || 'Pickup Location',
+        dropoff: '25 min (12.3 km) trip',
+        dropoffAddress: acceptedRideDetails.drop.address || acceptedRideDetails.drop.name || 'Drop Location',
+        pickupDetails: acceptedRideDetails.pickup,
+        dropoffDetails: acceptedRideDetails.drop,
+      };
+      setRideRequest(localRideRequest);
+      
+      // Navigate to NavigationScreen with the correct ride data including rideId and driverId
+      const navigationRide = {
+        ...localRideRequest,
+        rideId: acceptedRideDetails.rideId,
+        driverId: acceptedRideDetails.driverId,
+        userId: acceptedRideDetails.userId,
+      };
+      
+      console.log('🚗 Navigating to NavigationScreen with ride data:', navigationRide);
+      navigation.navigate('NavigationScreen', { ride: navigationRide });
     }
-  };
+  }, [acceptedRideDetails, navigation]);
+
+  // Listen for driver cancellation success
+  useEffect(() => {
+    const socket = socketManager.getSocket();
+    if (socket) {
+      const handleDriverCancellationSuccess = (data: any) => {
+        console.log('✅ Driver cancellation success received in HomeScreen:', data);
+        // Navigate to home screen after successful cancellation
+        navigation.navigate('Home');
+      };
+
+      socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+
+      return () => {
+        socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+      };
+    }
+  }, [navigation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
@@ -1805,75 +1044,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      {/* Test Buttons (show only when online and no ride in progress) */}
-      {isOnline && !isRideActive && (
-        <View style={{
-          position: 'absolute',
-          bottom: 170,
-          right: 24,
-          flexDirection: 'column',
-          gap: 12,
-          zIndex: 100,
-        }}>
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#1877f2',
-              borderRadius: 32,
-              paddingVertical: 16,
-              paddingHorizontal: 28,
-              elevation: 8,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-            }}
-            onPress={handleTestRideRequest}
-            activeOpacity={0.7}
-          >
-            <Animated.Text
-              style={{
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: 18,
-              }}
-            >
-              Test Ride Request
-            </Animated.Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#00C853',
-              borderRadius: 32,
-              paddingVertical: 12,
-              paddingHorizontal: 24,
-              elevation: 8,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-            }}
-            onPress={() => {
-              socketManager.sendTestEvent({ 
-                message: 'Hello from driver app!',
-                timestamp: new Date().toISOString(),
-                driverId: 'driver_001'
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <Animated.Text
-              style={{
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: 14,
-              }}
-            >
-              Test Socket
-            </Animated.Text>
-          </TouchableOpacity>
-        </View>
-      )}
+
       {/* Top Bar Overlay */}
       <Animated.View
         style={[
@@ -1908,10 +1079,10 @@ export default function HomeScreen() {
           <Text style={styles.speedLimit}>80</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Socket Connection Status */}
+          {/* Driver Status Indicator */}
           {isOnline && (
             <View style={{
-              backgroundColor: isSocketConnected ? '#00C853' : '#FF3B30',
+              backgroundColor: getDriverStatusColor(),
               borderRadius: 8,
               paddingHorizontal: 8,
               paddingVertical: 4,
@@ -1922,7 +1093,7 @@ export default function HomeScreen() {
                 fontSize: 10,
                 fontWeight: 'bold',
               }}>
-                {connectionStatus}
+                {getDriverStatusText()}
               </Text>
               <Text style={{
                 color: '#fff',
@@ -1930,7 +1101,7 @@ export default function HomeScreen() {
                 fontWeight: 'bold',
                 marginTop: 2,
               }}>
-                ID: {driverId}
+                {isSocketConnected ? 'Connected' : 'Disconnected'}
               </Text>
             </View>
           )}
@@ -1997,11 +1168,11 @@ export default function HomeScreen() {
                 }, 1000);
                 
                 // Send location update to socket server if online
-                if (isOnline && isSocketConnected) {
+                if (isOnline && isSocketConnected && location && currentRideRequest) {
                   sendLocationUpdate({
                     latitude: location.coords.latitude,
                     longitude: location.coords.longitude,
-                    userId: 'user123', // This should come from active ride data
+                    userId: currentRideRequest.userId, // Use actual user ID from active ride
                     driverId: 'driver_001'
                   });
                 }
@@ -2020,7 +1191,7 @@ export default function HomeScreen() {
       )}
       {/* Bottom Online/Offline Bar */}
       <SafeAreaView style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent', paddingBottom: insets.bottom > 0 ? insets.bottom : 16, zIndex: 10000 }} edges={['bottom']}>
-        {isOnline && !isRideActive && !navigationRide && !rideRequest && !showOtp && !rideInProgress && (
+        {isOnline && !isRideActive && (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 10 }}>
             <View style={{
               width: '94%',
@@ -2219,45 +1390,8 @@ export default function HomeScreen() {
         <RideRequestScreen
           ride={rideRequest}
           onClose={() => setRideRequest(null)}
-          onAccept={() => {
-            // Accept logic here
-            if (currentRideRequest) {
-              acceptRide(currentRideRequest);
-              sendDriverStatus({ driverId: 'driver_001', status: 'busy' });
-            }
-            setRideRequest(null);
-          }}
-          onReject={() => {
-            if (currentRideRequest) {
-              rejectRide(currentRideRequest);
-            }
-            setRideRequest(null);
-          }}
-        />
-      )}
-      {/* Navigation Screen */}
-      {navigationRide && !showOtp && (
-        <>
-        <NavigationScreen
-          ride={navigationRide}
-          onNavigate={handleNavigate}
-          onArrived={handleArrived}
-            onClose={() => handleCancelRide(navigationRide)}
-        />
-        </>
-      )}
-      {/* OTP Screen */}
-      {navigationRide && showOtp && (
-        <OtpScreen onSubmit={handleOtpSubmit} onClose={() => setShowOtp(false)} />
-      )}
-      {/* Ride In Progress Screen */}
-      {rideInProgress && (
-        <RideInProgressScreen
-          ride={rideInProgress}
-          onNavigate={handleNavigateToDropoff}
-          onEnd={handleEndRide}
-          onClose={() => setRideInProgress(null)}
-          navigation={navigation}
+          onAccept={handleAcceptRide}
+          onReject={handleRejectRide}
         />
       )}
       <MenuModal

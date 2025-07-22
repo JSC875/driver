@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -35,6 +35,8 @@ export type RideRequest = {
 };
 
 const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRequest; onClose: () => void; onAccept: () => void; onReject?: () => void }) => {
+  const [isAccepting, setIsAccepting] = useState(false);
+  
   const stopAudio = async () => {
     if (soundRef.current) {
       await soundRef.current.stopAsync();
@@ -152,11 +154,20 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject }: { ride: RideRe
             </TouchableOpacity>
           )}
           <Animated.View style={{ flex: 1, alignItems: 'center', transform: [{ scale: acceptAnim }] }}>
-            <TouchableOpacity style={styles.acceptButton} onPress={async () => {
-              await stopAudio();
-              onAccept();
-            }} activeOpacity={0.8}>
-              <Text style={styles.acceptButtonText}>Accept</Text>
+            <TouchableOpacity 
+              style={[styles.acceptButton, isAccepting && styles.acceptButtonDisabled]} 
+              onPress={async () => {
+                if (isAccepting) return; // Prevent multiple clicks
+                setIsAccepting(true);
+                await stopAudio();
+                onAccept();
+              }} 
+              activeOpacity={0.8}
+              disabled={isAccepting}
+            >
+              <Text style={styles.acceptButtonText}>
+                {isAccepting ? 'Accepting...' : 'Accept'}
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -248,6 +259,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 2,
     elevation: 2,
+  },
+  acceptButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   acceptButtonText: {
     color: 'red',
