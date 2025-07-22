@@ -1,0 +1,7 @@
+COPY . /app/
+WORKDIR /app
+RUN apt-get update && apt-get install -y dos2unix
+RUN dos2unix mvnw && chmod +x mvnw
+RUN ls -l /app && file /app/mvnw && head -1 /app/mvnw
+RUN sh ./mvnw --version
+RUN --mount=type=cache,id=s/c411442d-729e-4fd2-a546-3ed9f68cdee4-m2/repository,target=/app/.m2/repository chmod +x ./mvnw && ./mvnw clean package -DskipTests 
