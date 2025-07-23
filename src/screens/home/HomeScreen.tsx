@@ -393,6 +393,7 @@ export default function HomeScreen() {
   const { addRide } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
   const [driverCreated, setDriverCreated] = useState(false); // Track if API was called
+  const driverCreationStarted = useRef(false); // Add this near the top of your HomeScreen component
 
   // Get the current ride request (first one in the array)
   const currentRideRequest = contextRideRequests.length > 0 ? contextRideRequests[0] : null;
@@ -856,7 +857,9 @@ export default function HomeScreen() {
 
   useEffect(() => {
     // Only run if user is loaded, user exists, and we haven't created the driver yet
-    if (!isLoaded || !user || driverCreated) return;
+    if (!isLoaded || !user || driverCreated || driverCreationStarted.current) return;
+
+    driverCreationStarted.current = true; // Set immediately to block further calls
 
     const createDriver = async () => {
       console.log('[createDriver] Starting driver creation process...');
