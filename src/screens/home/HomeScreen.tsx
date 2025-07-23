@@ -884,6 +884,8 @@ export default function HomeScreen() {
           phoneNumber: user.phoneNumbers?.[0]?.phoneNumber,
           userType: 'driver',
         });
+        // Log the phone number being sent for debugging
+        console.log('[createDriver] Phone number being sent:', user.phoneNumbers?.[0]?.phoneNumber);
 
         // Send request (Authorization header with custom JWT)
         console.log('[createDriver] Sending POST request to /drivers/createDrivers with Authorization header...');
@@ -917,6 +919,8 @@ export default function HomeScreen() {
           // Save clerk user id to local storage
           await AsyncStorage.setItem('clerkDriverId', data.data.clerkDriverId);
           console.log('[createDriver] Clerk user id saved to AsyncStorage:', data.data.clerkDriverId);
+          // Additional log for visibility
+          console.log('🚩 clerkDriverId just stored:', data.data.clerkDriverId);
           setDriverCreated(true);
         } else if (response.status === 403) {
           console.error('[createDriver] 403 Forbidden. Check your custom JWT and backend permissions.');
