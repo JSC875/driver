@@ -1045,7 +1045,7 @@ export default function HomeScreen() {
           }}
           pointerEvents="box-none"
         >
-          <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
+          {/* <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 24, marginBottom: 16 }}>
             <Ionicons name="compass-outline" size={22} color="#111" style={{ marginRight: 8 }} />
             <TouchableOpacity onPress={() => Alert.alert('Driving Time', 'Driving time feature coming soon!')}>
@@ -1054,7 +1054,7 @@ export default function HomeScreen() {
           </View>
           <TouchableOpacity style={{ marginLeft: 24, marginBottom: 32 }} onPress={() => Alert.alert('Waybill', 'Waybill feature coming soon!')}>
             <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '500' }}>Waybill</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Swipe to Go Offline Bar (modal, 90% width, bottom, working like online swipe) */}
           <View
