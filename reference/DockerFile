@@ -1,0 +1,35 @@
+# ---------- Stage 1: Build ----------
+FROM eclipse-temurin:17-jdk as build
+
+WORKDIR /app
+
+# Copy Maven wrapper and set permissions
+COPY mvnw .
+COPY .mvn .mvn
+RUN chmod +x ./mvnw  # <<< ✅ this line is critical
+
+# Copy Maven config and pre-download dependencies
+COPY pom.xml .
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+
+# ---------- Stage 2: Runtime ----------
+FROM eclipse-temurin:17-jre
+
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
+ENV JAVA_OPTS="-Xmx300m -Xms128m"
+ENV SPRING_PROFILES_ACTIVE=prod
+ENV PORT=8080
+
+EXPOSE ${PORT}
+
+CMD java $JAVA_OPTS -jar app.jar  

@@ -1,0 +1,9 @@
+[build]
+  builder = "NIXPACKS"
+
+[deploy]
+  start = "./mvnw spring-boot:run -Dspring-boot.run.profiles=prod"
+
+[env]
+  JAVA_VERSION = "17"
+  SPRING_PROFILES_ACTIVE = "prod" 
