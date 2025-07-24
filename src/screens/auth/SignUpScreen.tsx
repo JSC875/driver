@@ -20,6 +20,7 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Types
 interface NameStepProps {
@@ -562,7 +563,15 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       if (isPhoneVerified) {
         console.log('SignUpScreen - Phone verification successful!');
         console.log('SignUpScreen - Missing fields:', completeSignUp?.missingFields);
-        
+        // Save Clerk user ID if available and signup is complete
+        if (user && completeSignUp?.status === 'complete') {
+          try {
+            await AsyncStorage.setItem('clerkUserId', user.id);
+            console.log('SignUpScreen - Clerk user ID saved to AsyncStorage:', user.id);
+          } catch (e) {
+            console.error('SignUpScreen - Failed to save Clerk user ID:', e);
+          }
+        }
         // Check if we have all required fields (phone is verified, but we still need first_name and last_name)
         if (completeSignUp?.missingFields?.includes('first_name') || completeSignUp?.missingFields?.includes('last_name')) {
           console.log('SignUpScreen - Phone verified but missing name fields, proceeding to next step');
@@ -688,6 +697,13 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
           unsafeMetadata: { ...user.unsafeMetadata, type: 'customer' }
         });
         console.log('SignUpScreen - Clerk user updated with name');
+        // Save Clerk user ID after profile completion
+        try {
+          await AsyncStorage.setItem('clerkUserId', user.id);
+          console.log('SignUpScreen - Clerk user ID saved to AsyncStorage:', user.id);
+        } catch (e) {
+          console.error('SignUpScreen - Failed to save Clerk user ID:', e);
+        }
       }
       
       // TODO: Handle profile image upload if needed

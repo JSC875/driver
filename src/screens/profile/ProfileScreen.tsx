@@ -15,13 +15,71 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
-  const { user } = useUser();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const navigation = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // State for driver details
+  const [driverDetails, setDriverDetails] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    const fetchDriverDetails = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const key = 'clerkDriverId';
+        console.log('[ProfileScreen] Attempting to retrieve', key, 'from AsyncStorage...');
+        const clerkUserId = await AsyncStorage.getItem(key);
+        console.log('[ProfileScreen]', key, 'from AsyncStorage:', clerkUserId);
+        if (!clerkUserId) {
+          setError('No Clerk user ID found.');
+          console.error('[ProfileScreen] No Clerk user ID found in AsyncStorage.');
+          setLoading(false);
+          return;
+        }
+        // Get the token
+        const token = await getToken();
+        console.log('[ProfileScreen] Retrieved token:', token);
+        if (!token) {
+          setError('No auth token found.');
+          console.error('[ProfileScreen] No auth token found.');
+          setLoading(false);
+          return;
+        }
+        const url = `https://roqet-production.up.railway.app/drivers/getDriverByClerkDriverId/${clerkUserId}`;
+        console.log('[ProfileScreen] Fetching driver details from:', url);
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log('[ProfileScreen] Response status:', response.status);
+        if (!response.ok) {
+          setError('Failed to fetch driver details.');
+          console.error('[ProfileScreen] Failed to fetch driver details. Status:', response.status);
+          setLoading(false);
+          return;
+        }
+        const data = await response.json();
+        console.log('[ProfileScreen] Backend response data:', data);
+        setDriverDetails(data.data);
+      } catch (err) {
+        setError('An error occurred while fetching driver details.');
+        console.error('[ProfileScreen] Error while fetching driver details:', err);
+      } finally {
+        setLoading(false);
+        console.log('[ProfileScreen] Finished fetching driver details.');
+      }
+    };
+    fetchDriverDetails();
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -93,33 +151,28 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.detailsTitle}>Personal Details</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Name:</Text>
-            <Text style={styles.detailValue}>{getUserName()}</Text>
-          </View>
-          {user?.primaryEmailAddress?.emailAddress && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Email:</Text>
-              <Text style={styles.detailValue}>{user.primaryEmailAddress.emailAddress}</Text>
-            </View>
-          )}
-          {user?.primaryPhoneNumber?.phoneNumber && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Phone:</Text>
-              <Text style={styles.detailValue}>{user.primaryPhoneNumber.phoneNumber}</Text>
-            </View>
-          )}
-          {user?.unsafeMetadata?.dob && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>DOB:</Text>
-              <Text style={styles.detailValue}>{new Date(user.unsafeMetadata.dob).toLocaleDateString()}</Text>
-            </View>
-          )}
-          {user?.unsafeMetadata?.gender && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Gender:</Text>
-              <Text style={styles.detailValue}>{user.unsafeMetadata.gender}</Text>
-            </View>
+          {loading ? (
+            <Text>Loading driver details...</Text>
+          ) : error ? (
+            <Text style={{ color: 'red' }}>{error}</Text>
+          ) : driverDetails ? (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Name:</Text>
+                <Text style={styles.detailValue}>{driverDetails.firstName} {driverDetails.lastName}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Phone:</Text>
+                <Text style={styles.detailValue}>{driverDetails.phoneNumber}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>User Type:</Text>
+                <Text style={styles.detailValue}>{driverDetails.userType}</Text>
+              </View>
+              {/* Add more fields as needed */}
+            </>
+          ) : (
+            <Text>No driver details found.</Text>
           )}
         </View>
       </ScrollView>
