@@ -21,12 +21,13 @@ function goToHome(navigation: any) {
 }
 
 const feedbackTags = [
-  'Great ride',
+  
   'On time',
-  'Safe driving',
+  'Easy directions',
   'Friendly',
-  'Clean vehicle',
-  'Good route',
+  'Late pickup',
+  'Disrespectful Behaviour',
+  'Unclear Instructions',
 ];
 
 export default function RideSummaryScreen({ navigation, route }: any) {

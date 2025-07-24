@@ -393,6 +393,7 @@ export default function HomeScreen() {
   const { addRide } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
   const [driverCreated, setDriverCreated] = useState(false); // Track if API was called
+  const driverCreationStarted = useRef(false); // Add this near the top of your HomeScreen component
 
   // Get the current ride request (first one in the array)
   const currentRideRequest = contextRideRequests.length > 0 ? contextRideRequests[0] : null;
@@ -856,7 +857,9 @@ export default function HomeScreen() {
 
   useEffect(() => {
     // Only run if user is loaded, user exists, and we haven't created the driver yet
-    if (!isLoaded || !user || driverCreated) return;
+    if (!isLoaded || !user || driverCreated || driverCreationStarted.current) return;
+
+    driverCreationStarted.current = true; // Set immediately to block further calls
 
     const createDriver = async () => {
       console.log('[createDriver] Starting driver creation process...');
@@ -884,6 +887,8 @@ export default function HomeScreen() {
           phoneNumber: user.phoneNumbers?.[0]?.phoneNumber,
           userType: 'driver',
         });
+        // Log the phone number being sent for debugging
+        console.log('[createDriver] Phone number being sent:', user.phoneNumbers?.[0]?.phoneNumber);
 
         // Send request (Authorization header with custom JWT)
         console.log('[createDriver] Sending POST request to /drivers/createDrivers with Authorization header...');
@@ -917,6 +922,8 @@ export default function HomeScreen() {
           // Save clerk user id to local storage
           await AsyncStorage.setItem('clerkDriverId', data.data.clerkDriverId);
           console.log('[createDriver] Clerk user id saved to AsyncStorage:', data.data.clerkDriverId);
+          // Additional log for visibility
+          console.log('🚩 clerkDriverId just stored:', data.data.clerkDriverId);
           setDriverCreated(true);
         } else if (response.status === 403) {
           console.error('[createDriver] 403 Forbidden. Check your custom JWT and backend permissions.');
@@ -1038,7 +1045,7 @@ export default function HomeScreen() {
           }}
           pointerEvents="box-none"
         >
-          <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
+          {/* <Text style={{ fontSize: 24, fontWeight: 'bold', marginLeft: 24, marginBottom: 24, color: '#111' }}>Recommended for you</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 24, marginBottom: 16 }}>
             <Ionicons name="compass-outline" size={22} color="#111" style={{ marginRight: 8 }} />
             <TouchableOpacity onPress={() => Alert.alert('Driving Time', 'Driving time feature coming soon!')}>
@@ -1047,7 +1054,7 @@ export default function HomeScreen() {
           </View>
           <TouchableOpacity style={{ marginLeft: 24, marginBottom: 32 }} onPress={() => Alert.alert('Waybill', 'Waybill feature coming soon!')}>
             <Text style={{ color: '#007AFF', fontSize: 16, fontWeight: '500' }}>Waybill</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Swipe to Go Offline Bar (modal, 90% width, bottom, working like online swipe) */}
           <View
