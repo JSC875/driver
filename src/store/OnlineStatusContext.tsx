@@ -9,6 +9,7 @@ import socketManager, {
 } from '../utils/socket';
 import { getUserIdFromJWT, getUserTypeFromJWT } from '../utils/jwtDecoder';
 import { useAuth } from '@clerk/clerk-expo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface RideRequest {
   rideId: string;
@@ -300,7 +301,7 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, [driverId]);
 
-  const acceptRide = (rideRequest: RideRequest) => {
+  const acceptRide = async (rideRequest: RideRequest) => {
     console.log('✅ Accepting ride:', rideRequest);
     
     // Check if we're already accepting a ride
@@ -331,6 +332,35 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       driverPhone: '+1234567890',
       estimatedArrival: '5 minutes'
     });
+    
+    // Call backend endpoint to accept ride
+    try {
+      const clerkDriverId = await AsyncStorage.getItem('clerkDriverId');
+      if (!clerkDriverId) {
+        console.error('[acceptRide] No clerkDriverId found in AsyncStorage');
+      } else {
+        const url = `https://roqet-production.up.railway.app/rides/accept?rideId=${rideRequest.rideId}&clerkDriverId=${clerkDriverId}`;
+        console.log('[acceptRide] Hitting backend endpoint:', url);
+        // Get the Bearer token using the correct template
+        const token = await getToken({ template: 'driver_app_token' });
+        if (!token) {
+          console.error('[acceptRide] No auth token found.');
+        } else {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          console.log('[acceptRide] Backend response status:', response.status);
+          const data = await response.json().catch(() => null);
+          console.log('[acceptRide] Backend response data:', data);
+        }
+      }
+    } catch (err) {
+      console.error('[acceptRide] Error calling backend accept endpoint:', err);
+    }
     
     setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== rideRequest.rideId));
     

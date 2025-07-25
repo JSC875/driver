@@ -349,6 +349,44 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
   );
 };
 
+async function updateDriverStatusOnBackend({
+  clerkDriverId,
+  latitude,
+  longitude,
+  isOnline,
+  token,
+}: {
+  clerkDriverId: string;
+  latitude: number;
+  longitude: number;
+  isOnline: boolean;
+  token: string;
+}) {
+  try {
+    const response = await fetch(
+      `https://roqet-production.up.railway.app/drivers/update-location/${clerkDriverId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          isOnline,
+        }),
+      }
+    );
+    const data = await response.json().catch(() => null);
+    console.log('[updateDriverStatusOnBackend] Response:', response.status, data);
+    return response.ok;
+  } catch (err) {
+    console.error('[updateDriverStatusOnBackend] Error:', err);
+    return false;
+  }
+}
+
 export default function HomeScreen() {
   const { user, isLoaded } = useUser();
   const { getToken, signOut } = useAuth();
@@ -369,7 +407,8 @@ export default function HomeScreen() {
     resetDriverStatus,
     connectionStatus,
     driverId,
-    userType
+    userType,
+    driverLocation
   } = useOnlineStatus();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
@@ -459,7 +498,7 @@ export default function HomeScreen() {
           lastHaptic.current = now;
         }
       },
-      onPanResponderRelease: (e, gestureState) => {
+      onPanResponderRelease: async (e, gestureState) => {
         if (Platform.OS === 'android') {
           Vibration.cancel();
         }
@@ -477,6 +516,17 @@ export default function HomeScreen() {
               try {
                 const onlineToken = await getToken({ template: 'driver_app_token' });
                 console.log('Custom Clerk JWT (online):', onlineToken);
+                let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                const clerkDriverId = user?.id || (await AsyncStorage.getItem('clerkDriverId'));
+                if (location && onlineToken && clerkDriverId) {
+                  await updateDriverStatusOnBackend({
+                    clerkDriverId,
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    isOnline: true,
+                    token: onlineToken,
+                  });
+                }
                 // Call backend to get user by Clerk ID
                 if (user.id && onlineToken) {
                   try {
@@ -556,7 +606,7 @@ export default function HomeScreen() {
           lastHaptic.current = now;
         }
       },
-      onPanResponderRelease: (e, gestureState) => {
+      onPanResponderRelease: async (e, gestureState) => {
         if (Platform.OS === 'android') {
           Vibration.cancel();
         }
@@ -566,7 +616,7 @@ export default function HomeScreen() {
             toValue: offlineSwipeWidth - 56,
             duration: 120,
             useNativeDriver: false,
-          }).start(() => {
+          }).start(async () => {
             setIsOnline(false);
             setShowOfflineScreen(false);
             // Reset the main swipe bar to its default position
@@ -576,6 +626,23 @@ export default function HomeScreen() {
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             goToHome(navigation);
+            // Update backend with offline status
+            try {
+              const offlineToken = await getToken({ template: 'driver_app_token' });
+              let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              const clerkDriverId = user?.id || (await AsyncStorage.getItem('clerkDriverId'));
+              if (location && offlineToken && clerkDriverId) {
+                await updateDriverStatusOnBackend({
+                  clerkDriverId,
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  isOnline: false,
+                  token: offlineToken,
+                });
+              }
+            } catch (err) {
+              console.error('Failed to update backend on go offline:', err);
+            }
           });
         } else {
           Animated.spring(offlineSwipeX, {
