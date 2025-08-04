@@ -10,12 +10,15 @@ import {
   Platform,
   Vibration,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
+import rideService from '../../services/rideService';
 
 const { width } = Dimensions.get('window');
 
@@ -26,8 +29,10 @@ interface EndRideScreenProps {
 
 export default function EndRideScreen({ navigation, route }: EndRideScreenProps) {
   const { ride } = route.params || {};
+  const { getToken } = useAuth();
   const swipeX = useRef(new Animated.Value(0)).current;
   const [swiping, setSwiping] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const lastHaptic = useRef(0);
   
   const SWIPE_WIDTH = width * 0.9;
@@ -35,8 +40,8 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 5,
+      onStartShouldSetPanResponder: () => !isCompleting,
+      onMoveShouldSetPanResponder: (_, gesture) => !isCompleting && Math.abs(gesture.dx) > 5,
       onPanResponderGrant: () => {
         if (Platform.OS === 'android') {
           Vibration.vibrate([0, 2000], true);
@@ -90,39 +95,79 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
     })
   ).current;
 
-  const handleEndRide = () => {
-    // Call the completeRide function to notify the server
+  const handleEndRide = async () => {
+    if (isCompleting) return; // Prevent multiple calls
+    
+    setIsCompleting(true);
     console.log('Ending ride:', ride);
     
-    if (ride?.rideId && ride?.driverId) {
-      // Import and use the socket manager to complete the ride
-      const socketManager = require('../../utils/socket').default;
-      socketManager.completeRide({
-        rideId: ride.rideId,
-        driverId: ride.driverId
-      });
+    try {
+      // Get authentication token
+      const token = await getToken({ template: 'driver_app_token', skipCache: true });
       
-      console.log('✅ Ride completion request sent to server');
-    } else {
-      console.error('❌ Missing rideId or driverId for ride completion');
-    }
-    
-    // Navigate to RideSummaryScreen for feedback
-    const summaryData = {
-      destination: { name: ride?.dropoffAddress || 'Destination' },
-      estimate: {
-        distance: '5 km',
-        duration: '15 min',
-        fare: ride?.price || '100'
-      },
-      driver: {
-        name: 'Driver Name',
-        photo: 'https://via.placeholder.com/60',
-        vehicleModel: 'Vehicle Model',
-        vehicleNumber: 'Vehicle Number'
+      if (ride?.rideId && ride?.driverId) {
+        // Call the API endpoint to complete the ride
+        console.log('🚀 Calling API to complete ride...');
+        const apiResponse = await rideService.completeRide(ride.rideId, token);
+        
+        if (apiResponse.success) {
+          console.log('✅ Ride completed successfully via API');
+          
+          // Also call the socket manager to notify the server (keeping existing functionality)
+          const socketManager = require('../../utils/socket').default;
+          socketManager.completeRide({
+            rideId: ride.rideId,
+            driverId: ride.driverId
+          });
+          
+          console.log('✅ Ride completion request sent to server via socket');
+        } else {
+          console.error('❌ API call failed:', apiResponse.error);
+          Alert.alert(
+            'Error',
+            apiResponse.error || 'Failed to complete ride. Please try again.',
+            [{ text: 'OK' }]
+          );
+          setIsCompleting(false);
+          return;
+        }
+      } else {
+        console.error('❌ Missing rideId or driverId for ride completion');
+        Alert.alert(
+          'Error',
+          'Missing ride information. Please try again.',
+          [{ text: 'OK' }]
+        );
+        setIsCompleting(false);
+        return;
       }
-    };
-    navigation.navigate('RideSummary', summaryData);
+      
+      // Navigate to RideSummaryScreen for feedback
+      const summaryData = {
+        destination: { name: ride?.dropoffAddress || 'Destination' },
+        estimate: {
+          distance: '5 km',
+          duration: '15 min',
+          fare: ride?.price || '100'
+        },
+        driver: {
+          name: 'Driver Name',
+          photo: 'https://via.placeholder.com/60',
+          vehicleModel: 'Vehicle Model',
+          vehicleNumber: 'Vehicle Number'
+        }
+      };
+      navigation.navigate('RideSummary', summaryData);
+      
+    } catch (error) {
+      console.error('❌ Error completing ride:', error);
+      Alert.alert(
+        'Error',
+        'Failed to complete ride. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
+      setIsCompleting(false);
+    }
   };
 
   const handleGoBack = () => {
@@ -186,7 +231,7 @@ export default function EndRideScreen({ navigation, route }: EndRideScreenProps)
             <Ionicons name="arrow-forward" size={24} color={Colors.white} />
           </Animated.View>
           <Text style={styles.swipeText}>
-            {swiping ? 'Keep swiping...' : 'Swipe to end ride'}
+            {isCompleting ? 'Completing ride...' : swiping ? 'Keep swiping...' : 'Swipe to end ride'}
           </Text>
         </View>
       </View>
