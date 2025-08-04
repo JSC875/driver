@@ -410,6 +410,36 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           
           if (response.ok) {
             console.log('✅ Ride accepted successfully via backend API');
+            
+            // Now call the start endpoint
+            try {
+              const startUrl = `https://bike-taxi-production.up.railway.app/api/rides/${backendRideId}/start`;
+              console.log('[acceptRide] Hitting start endpoint:', startUrl);
+              
+              const startResponse = await fetch(startUrl, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                  'X-App-Version': '1.0.0',
+                  'X-Platform': 'ReactNative',
+                  'X-Environment': 'development',
+                },
+              });
+              
+              console.log('[acceptRide] Start endpoint response status:', startResponse.status);
+              const startData = await startResponse.json().catch(() => null);
+              console.log('[acceptRide] Start endpoint response data:', startData);
+              
+              if (startResponse.ok) {
+                console.log('✅ Ride started successfully via backend API');
+              } else {
+                console.error('❌ Failed to start ride via backend API:', startResponse.status);
+                console.error('❌ Start response data:', startData);
+              }
+            } catch (startErr) {
+              console.error('[acceptRide] Error calling backend start endpoint:', startErr);
+            }
           } else {
             console.error('❌ Failed to accept ride via backend API:', response.status);
             console.error('❌ Response data:', data);
