@@ -80,4 +80,82 @@ export const getUserTypeFromJWT = async (getToken: any) => {
     console.error('Error getting user type from JWT:', error);
     return 'driver';
   }
+};
+
+// Comprehensive JWT logging utility
+export const logJWTDetails = async (getToken: any, context: string = 'JWT Analysis') => {
+  try {
+    console.log(`🔍 === ${context} ===`);
+    
+    // Get the JWT token
+    const token = await getToken({ template: 'driver_app_token', skipCache: true });
+    if (!token) {
+      console.log('❌ No JWT token available');
+      return null;
+    }
+    
+    console.log(`🔑 Token Length: ${token.length} characters`);
+    console.log(`🔑 Token Preview: ${token.substring(0, 50)}...${token.substring(token.length - 20)}`);
+    
+    // Decode the JWT
+    const decoded = decodeJWT(token);
+    if (!decoded) {
+      console.log('❌ Failed to decode JWT');
+      return null;
+    }
+    
+    console.log('📋 Decoded JWT Payload:');
+    console.log(JSON.stringify(decoded, null, 2));
+    
+    // Check for custom fields
+    const customFields = {
+      firstName: decoded.firstName || 'Not found',
+      lastName: decoded.lastName || 'Not found',
+      userType: decoded.userType || 'Not found',
+      phoneNumber: decoded.phoneNumber || 'Not found'
+    };
+    
+    console.log('🎯 Custom Fields Check:');
+    Object.entries(customFields).forEach(([key, value]) => {
+      console.log(`  ${key}: ${value}`);
+    });
+    
+    console.log(`✅ === ${context} COMPLETED ===`);
+    return decoded;
+    
+  } catch (error) {
+    console.error(`❌ === ${context} ERROR ===`);
+    console.error('Error in JWT logging:', error);
+    return null;
+  }
+};
+
+// Full JWT token logging utility
+export const logFullJWT = async (getToken: any, context: string = 'Full JWT Token') => {
+  try {
+    console.log(`🔍 === ${context} ===`);
+    
+    const token = await getToken({ template: 'driver_app_token', skipCache: true });
+    if (!token) {
+      console.log('❌ No JWT token available');
+      return null;
+    }
+    
+    console.log('🔑 Full JWT Token:');
+    console.log(token);
+    
+    const decoded = decodeJWT(token);
+    if (decoded) {
+      console.log('📋 Full Decoded Payload:');
+      console.log(JSON.stringify(decoded, null, 2));
+    }
+    
+    console.log(`✅ === ${context} COMPLETED ===`);
+    return token;
+    
+  } catch (error) {
+    console.error(`❌ === ${context} ERROR ===`);
+    console.error('Error in full JWT logging:', error);
+    return null;
+  }
 }; 

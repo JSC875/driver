@@ -21,6 +21,7 @@ import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logJWTDetails } from '../../utils/jwtDecoder';
 
 // Types
 interface NameStepProps {
@@ -563,6 +564,30 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       if (isPhoneVerified) {
         console.log('SignUpScreen - Phone verification successful!');
         console.log('SignUpScreen - Missing fields:', completeSignUp?.missingFields);
+        
+        // Set userType in Clerk metadata immediately after phone verification
+        if (user) {
+          try {
+            await user.update({
+              unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+            });
+            console.log('SignUpScreen - User type set to driver after phone verification');
+            
+            // Force new JWT with updated userType
+            if (typeof getToken === 'function') {
+              const newToken = await getToken({ template: 'driver_app_token', skipCache: true });
+              console.log('SignUpScreen - New JWT with userType after phone verification:', newToken ? 'Generated' : 'Failed');
+              
+              // Log the JWT details to verify custom fields
+              if (newToken) {
+                await logJWTDetails(getToken, 'SignUp Phone Verification JWT Analysis');
+              }
+            }
+          } catch (metadataErr) {
+            console.error('SignUpScreen - Error setting user type after phone verification:', metadataErr);
+          }
+        }
+        
         // Save Clerk user ID if available and signup is complete
         if (user && completeSignUp?.status === 'complete') {
           try {
@@ -691,18 +716,34 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       }
       // Set userType in Clerk metadata if user is available
       if (user) {
-        await user.update({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          unsafeMetadata: { ...user.unsafeMetadata, type: 'customer' }
-        });
-        console.log('SignUpScreen - Clerk user updated with name');
-        // Save Clerk user ID after profile completion
         try {
-          await AsyncStorage.setItem('clerkUserId', user.id);
-          console.log('SignUpScreen - Clerk user ID saved to AsyncStorage:', user.id);
-        } catch (e) {
-          console.error('SignUpScreen - Failed to save Clerk user ID:', e);
+          await user.update({
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+          });
+          console.log('SignUpScreen - Clerk user updated with name and userType');
+          
+          // Force new JWT with updated userType and name fields
+          if (typeof getToken === 'function') {
+            const newToken = await getToken({ template: 'driver_app_token', skipCache: true });
+            console.log('SignUpScreen - New JWT with complete user data:', newToken ? 'Generated' : 'Failed');
+            
+            // Log the JWT details to verify custom fields
+            if (newToken) {
+              await logJWTDetails(getToken, 'SignUp Profile Completion JWT Analysis');
+            }
+          }
+          
+          // Save Clerk user ID after profile completion
+          try {
+            await AsyncStorage.setItem('clerkUserId', user.id);
+            console.log('SignUpScreen - Clerk user ID saved to AsyncStorage:', user.id);
+          } catch (e) {
+            console.error('SignUpScreen - Failed to save Clerk user ID:', e);
+          }
+        } catch (userUpdateErr) {
+          console.error('SignUpScreen - Error updating user data:', userUpdateErr);
         }
       }
       

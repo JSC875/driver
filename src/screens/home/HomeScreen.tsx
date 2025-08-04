@@ -20,6 +20,10 @@ import { useRideHistory } from '../../store/RideHistoryContext';
 import { useUserFromJWT } from '../../utils/jwtDecoder';
 import { RideRequest as BackendRideRequest } from '../../store/OnlineStatusContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { useLocationStore } from '../../store/useLocationStore';
+import { connectSocketWithJWT } from '../../utils/socket';
+import { logJWTDetails } from '../../utils/jwtDecoder';
 
 const { width, height } = Dimensions.get('window');
 
@@ -364,12 +368,15 @@ async function updateDriverStatusOnBackend({
 }) {
   try {
     const response = await fetch(
-      `https://roqet-production.up.railway.app/drivers/update-location/${clerkDriverId}`,
+      `https://bike-taxi-production.up.railway.app/api/drivers/me/location`,
       {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'X-App-Version': '1.0.0',
+          'X-Platform': 'ReactNative',
+          'X-Environment': 'development',
         },
         body: JSON.stringify({
           latitude,
@@ -432,7 +439,97 @@ export default function HomeScreen() {
   const { addRide } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
   const [driverCreated, setDriverCreated] = useState(false); // Track if API was called
-  const driverCreationStarted = useRef(false); // Add this near the top of your HomeScreen component
+  const driverCreationStarted = useRef(false);
+
+  // Swipe gesture state - REMOVED (no more map swiping)
+
+  // Function to handle status update on swipe - REMOVED (no more map swiping)
+
+  const handleOfflineStatusUpdate = async () => {
+    try {
+      console.log('📡 Calling /api/drivers/me/status endpoint for OFFLINE...');
+      
+      // Force JWT regeneration to ensure we have the latest userType claim
+      console.log('🔄 Forcing JWT regeneration before offline status update...');
+      const customToken = await getToken({ template: 'driver_app_token', skipCache: true });
+      if (!customToken) {
+        console.error('❌ No custom Clerk JWT found!');
+        return;
+      }
+
+      // Log JWT details for debugging
+      await logJWTDetails(getToken, 'Offline Status Update - JWT Analysis');
+
+      const response = await fetch('https://bike-taxi-production.up.railway.app/api/drivers/me/status', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${customToken}`,
+          'Content-Type': 'application/json',
+          'X-App-Version': '1.0.0',
+          'X-Platform': 'ReactNative',
+          'X-Environment': 'development',
+        },
+        body: JSON.stringify({
+          status: 'OFFLINE'
+        }),
+      });
+
+      const responseText = await response.text();
+      let data = null;
+      
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          console.error('❌ Failed to parse response as JSON:', jsonErr);
+        }
+      }
+
+      if (response.ok) {
+        console.log('✅ Offline status update successful!');
+        console.log('📊 Response data:', data);
+      } else if (response.status === 403) {
+        console.error('❌ 403 Forbidden - JWT userType issue detected for offline status');
+        console.error('📊 Response status:', response.status);
+        console.error('📊 Response data:', data);
+        
+        // Try to regenerate JWT and retry once
+        console.log('🔄 Attempting JWT regeneration and retry for offline status...');
+        try {
+          const retryToken = await getToken({ template: 'driver_app_token', skipCache: true });
+          await logJWTDetails(getToken, 'Offline Status Update Retry - JWT Analysis');
+          
+          const retryResponse = await fetch('https://bike-taxi-production.up.railway.app/api/drivers/me/status', {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${retryToken}`,
+              'Content-Type': 'application/json',
+              'X-App-Version': '1.0.0',
+              'X-Platform': 'ReactNative',
+              'X-Environment': 'development',
+            },
+            body: JSON.stringify({
+              status: 'OFFLINE'
+            }),
+          });
+          
+          if (retryResponse.ok) {
+            console.log('✅ Offline status update successful after retry!');
+          } else {
+            console.error('❌ Offline status update failed even after retry');
+          }
+        } catch (retryError) {
+          console.error('❌ Offline status retry failed:', retryError);
+        }
+      } else {
+        console.error('❌ Offline status update failed');
+        console.error('📊 Response status:', response.status);
+        console.error('📊 Response data:', data);
+      }
+    } catch (error) {
+      console.error('❌ Error during offline status update:', error);
+    }
+  };
 
   // Get the current ride request (first one in the array)
   const currentRideRequest = contextRideRequests.length > 0 ? contextRideRequests[0] : null;
@@ -475,6 +572,23 @@ export default function HomeScreen() {
 
   useAssignUserType('driver');
 
+  // Helper function to force JWT regeneration
+  const forceJWTRegeneration = async () => {
+    try {
+      console.log('🔄 Forcing JWT regeneration...');
+      const updatedToken = await getToken({ template: 'driver_app_token', skipCache: true });
+      console.log('✅ JWT regenerated successfully');
+      
+      // Verify the updated JWT has correct userType
+      await logJWTDetails(getToken, 'Forced JWT Regeneration');
+      
+      return updatedToken;
+    } catch (error) {
+      console.error('❌ JWT regeneration failed:', error);
+      return null;
+    }
+  };
+
   // PanResponder for swipe to go online gesture
   const panResponder = useRef(
     PanResponder.create({
@@ -511,6 +625,15 @@ export default function HomeScreen() {
           }).start(async () => {
             setIsOnline(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            
+            // Call status endpoint to update driver status to AVAILABLE
+            try {
+              console.log('🔄 Swipe to online - calling status endpoint...');
+              await handleStatusUpdate();
+            } catch (error) {
+              console.error('❌ Error updating status on swipe to online:', error);
+            }
+            
             // Fetch JWT token when going online
             if (user?.unsafeMetadata?.type === 'driver') {
               try {
@@ -527,30 +650,9 @@ export default function HomeScreen() {
                     token: onlineToken,
                   });
                 }
-                // Call backend to get user by Clerk ID
-                if (user.id && onlineToken) {
-                  try {
-                    const response = await fetch(`https://roqet-production.up.railway.app/users/getUserByClerkUserId/${user.id}`, {
-                      method: 'GET',
-                      headers: {
-                        'Authorization': `Bearer ${onlineToken}`,
-                        'Content-Type': 'application/json',
-                      },
-                    });
-                    const text = await response.text();
-                    console.log('Backend response status:', response.status);
-                    console.log('Backend response text:', text);
-                    let data = null;
-                    try {
-                      data = text ? JSON.parse(text) : null;
-                    } catch (e) {
-                      console.error('Failed to parse backend response as JSON:', e);
-                    }
-                    console.log('Backend user response:', data);
-                  } catch (err) {
-                    console.error('Failed to fetch user from backend:', err);
-                  }
-                }
+                // Note: Removed old API call to roqet-production endpoint
+                // Note: Removed old API call to roqet-production endpoint
+                // Now using proper bike-taxi-production endpoints with JWT authentication
               } catch (err) {
                 console.error('Failed to fetch custom JWT on go online:', err);
               }
@@ -626,6 +728,15 @@ export default function HomeScreen() {
             }).start();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             goToHome(navigation);
+            
+            // Call status endpoint to update driver status to OFFLINE
+            try {
+              console.log('🔄 Swipe to offline - calling status endpoint...');
+              await handleOfflineStatusUpdate();
+            } catch (error) {
+              console.error('❌ Error updating status on swipe to offline:', error);
+            }
+            
             // Update backend with offline status
             try {
               const offlineToken = await getToken({ template: 'driver_app_token' });
@@ -939,27 +1050,78 @@ export default function HomeScreen() {
           return;
         }
 
+        // Step 1: Create user record first (like customer app does)
+        console.log('[createDriver] Step 1: Creating user record...');
+        const userResponse = await fetch('https://bike-taxi-production.up.railway.app/api/users/me', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${customToken}`,
+            'Content-Type': 'application/json',
+            'X-App-Version': '1.0.0',
+            'X-Platform': 'ReactNative',
+            'X-Environment': 'development',
+          },
+        });
+        
+        if (userResponse.ok) {
+          console.log('[createDriver] ✅ User record created/retrieved successfully');
+        } else {
+          console.error('[createDriver] ❌ Failed to create user record:', userResponse.status);
+        }
+
+        // Step 2: Create driver record
+        console.log('[createDriver] Step 2: Creating driver record...');
+        
+        // Check if driver already exists first
+        console.log('[createDriver] Checking if driver already exists...');
+        const driverCheckResponse = await fetch(`https://bike-taxi-production.up.railway.app/api/drivers/me`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${customToken}`,
+            'Content-Type': 'application/json',
+            'X-App-Version': '1.0.0',
+            'X-Platform': 'ReactNative',
+            'X-Environment': 'development',
+          },
+        });
+        
+        if (driverCheckResponse.ok) {
+          console.log('[createDriver] ✅ Driver already exists, skipping creation');
+          setDriverCreated(true);
+          return;
+        } else if (driverCheckResponse.status === 404) {
+          console.log('[createDriver] Driver not found, proceeding with creation...');
+        } else {
+          console.log('[createDriver] Driver check response:', driverCheckResponse.status);
+        }
+
         // Prepare form data (send custom JWT in token field)
         const formData = new FormData();
-        formData.append('token', customToken); // custom JWT ONLY
+        formData.append('clerkUserId', user.id); // Use clerkUserId instead of token
         formData.append('firstName', user.firstName || '');
         formData.append('lastName', user.lastName || '');
-        formData.append('phoneNumber', user.phoneNumbers?.[0]?.phoneNumber || '');
+        
+        // Fix phone number format - remove country code to match backend validation
+        let phoneNumber = user.phoneNumbers?.[0]?.phoneNumber || '';
+        if (phoneNumber.startsWith('+91')) {
+          phoneNumber = phoneNumber.substring(3); // Remove +91 prefix
+        }
+        formData.append('phoneNumber', phoneNumber);
         formData.append('userType', 'driver');
         // Add profileImage and licenseImage if needed
         console.log('[createDriver] FormData prepared (custom JWT, Authorization header will be set):', {
-          token: customToken,
+          clerkUserId: user.id,
           firstName: user.firstName,
           lastName: user.lastName,
-          phoneNumber: user.phoneNumbers?.[0]?.phoneNumber,
+          phoneNumber: phoneNumber,
           userType: 'driver',
         });
         // Log the phone number being sent for debugging
-        console.log('[createDriver] Phone number being sent:', user.phoneNumbers?.[0]?.phoneNumber);
+        console.log('[createDriver] Phone number being sent:', phoneNumber);
 
         // Send request (Authorization header with custom JWT)
-        console.log('[createDriver] Sending POST request to /drivers/createDrivers with Authorization header...');
-        const response = await fetch('https://roqet-production.up.railway.app/drivers/createDrivers', {
+        console.log('[createDriver] Sending POST request to /api/registration/driver with Authorization header...');
+        const response = await fetch('https://bike-taxi-production.up.railway.app/api/registration/driver', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${customToken}`,
@@ -985,17 +1147,47 @@ export default function HomeScreen() {
           console.warn('[createDriver] Response body is empty');
         }
 
-        if (response.ok && data?.data?.clerkDriverId) {
-          // Save clerk user id to local storage
-          await AsyncStorage.setItem('clerkDriverId', data.data.clerkDriverId);
-          console.log('[createDriver] Clerk user id saved to AsyncStorage:', data.data.clerkDriverId);
-          // Additional log for visibility
-          console.log('🚩 clerkDriverId just stored:', data.data.clerkDriverId);
+        if (response.ok && data?.driverId) {
+          console.log('[createDriver] ✅ Driver created successfully!');
+          console.log('[createDriver] Driver ID:', data.driverId);
+          console.log('[createDriver] Clerk User ID:', data.clerkUserId);
+          console.log('[createDriver] Status:', data.status);
+          
+          // Force JWT regeneration to get updated userType claim
+          console.log('[createDriver] 🔄 Forcing JWT regeneration after driver creation...');
+          try {
+            const updatedToken = await getToken({ template: 'driver_app_token', skipCache: true });
+            console.log('[createDriver] ✅ JWT regenerated with updated userType claim');
+            
+            // Add a small delay to ensure backend has time to update User entity
+            console.log('[createDriver] ⏳ Waiting 2 seconds for backend to update User entity...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Verify the updated JWT has correct userType
+            await logJWTDetails(getToken, 'Driver Creation - JWT Verification');
+          } catch (jwtError) {
+            console.error('[createDriver] ⚠️ JWT regeneration failed:', jwtError);
+          }
+          
+          // Save the driver ID to AsyncStorage
+          try {
+            await AsyncStorage.setItem('driverId', data.driverId);
+            await AsyncStorage.setItem('clerkDriverId', data.clerkUserId);
+            console.log('[createDriver] Driver ID saved to AsyncStorage:', data.driverId);
+            console.log('🚩 clerkDriverId just stored:', data.clerkUserId);
+          } catch (e) {
+            console.error('[createDriver] Failed to save driver ID to AsyncStorage:', e);
+          }
+          
           setDriverCreated(true);
-        } else if (response.status === 403) {
-          console.error('[createDriver] 403 Forbidden. Check your custom JWT and backend permissions.');
+        } else if (response.status === 400 && data?.error?.includes('already exists')) {
+          console.log('[createDriver] ⚠️ Driver already exists, this is normal');
+          console.log('[createDriver] Driver already registered with clerkUserId:', user.id);
+          setDriverCreated(true);
         } else {
-          console.error('[createDriver] Backend error or missing clerkDriverId:', data);
+          console.error('[createDriver] ❌ Failed to create driver');
+          console.error('[createDriver] Response status:', response.status);
+          console.error('[createDriver] Response data:', data);
         }
       } catch (error) {
         console.error('[createDriver] Error during driver creation:', error);
@@ -1006,6 +1198,11 @@ export default function HomeScreen() {
   }, [isLoaded, user, driverCreated, getToken]);
 
   return (
+    <Animated.View 
+      style={[
+        { flex: 1, backgroundColor: '#fff' },
+      ]}
+    >
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom', 'left', 'right']}>
       {/* StatusBar background fix for edge-to-edge */}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: '#fff', zIndex: 10000 }} />
@@ -1715,7 +1912,16 @@ export default function HomeScreen() {
           onPress={() => setMenuVisible(false)}
         />
       )}
+      
+      {/* JWT Test Button and Modal - REMOVED */}
+
+      {/* Swipe Gesture Indicator - REMOVED */}
+
+      {/* Swipe Instruction - REMOVED */}
+
+
     </SafeAreaView>
+    </Animated.View>
   );
 }
 

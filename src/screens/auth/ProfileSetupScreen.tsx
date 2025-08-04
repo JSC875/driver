@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useUser } from '@clerk/clerk-expo';
+import { useUser, useAuth } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { useAssignUserType } from '../../utils/helpers';
+import { logJWTDetails } from '../../utils/jwtDecoder';
 
 export default function ProfileSetupScreen({ navigation }: any) {
   const [firstName, setFirstName] = useState('');
@@ -26,8 +27,9 @@ export default function ProfileSetupScreen({ navigation }: any) {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useUser();
+  const { getToken } = useAuth();
 
-  useAssignUserType('customer');
+  useAssignUserType('driver');
 
   const handleImagePicker = () => {
     Alert.alert(
@@ -54,12 +56,23 @@ export default function ProfileSetupScreen({ navigation }: any) {
       await user?.update({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        unsafeMetadata: { ...user.unsafeMetadata, type: 'customer' }
+        unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
       });
 
       // Add email if provided
       if (email.trim()) {
         await user?.createEmailAddress({ email: email.trim() });
+      }
+
+      // Force new JWT with updated custom fields
+      if (typeof getToken === 'function') {
+        const newToken = await getToken({ template: 'driver_app_token', skipCache: true });
+        console.log('ProfileSetupScreen - New JWT with complete user data:', newToken ? 'Generated' : 'Failed');
+        
+        // Log the JWT details to verify custom fields
+        if (newToken) {
+          await logJWTDetails(getToken, 'ProfileSetup JWT Analysis');
+        }
       }
 
       // Don't navigate manually - the auth state will handle the transition
