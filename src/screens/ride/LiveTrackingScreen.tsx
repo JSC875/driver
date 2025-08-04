@@ -39,7 +39,16 @@ export default function LiveTrackingScreen({ navigation, route }: any) {
   }, []);
 
   const handleChat = () => {
-    navigation.navigate('Chat', { driver });
+    console.log('🔗 Navigating to Chat with data:', { 
+      ride: { rideId: route.params.rideId },
+      user: driver,
+      driverId: route.params.driverId || 'driver123'
+    });
+    navigation.navigate('Chat', { 
+      ride: { rideId: route.params.rideId },
+      user: driver,
+      driverId: route.params.driverId || 'driver123'
+    });
   };
 
   const handleCall = () => {

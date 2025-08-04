@@ -94,6 +94,45 @@ export type DriverLocationUpdateCallback = (data: {
   timestamp: number;
 }) => void;
 
+// Chat event types
+export type ChatMessageCallback = (data: {
+  id: string;
+  rideId: string;
+  senderId: string;
+  senderType: 'user' | 'driver';
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+}) => void;
+
+export type ChatHistoryCallback = (data: {
+  rideId: string;
+  messages: Array<{
+    id: string;
+    rideId: string;
+    senderId: string;
+    senderType: 'user' | 'driver';
+    message: string;
+    timestamp: string;
+    isRead: boolean;
+  }>;
+  totalMessages: number;
+}) => void;
+
+export type TypingIndicatorCallback = (data: {
+  rideId: string;
+  isTyping: boolean;
+  senderId: string;
+  senderType: 'user' | 'driver';
+}) => void;
+
+export type MessagesReadCallback = (data: {
+  rideId: string;
+  readBy: string;
+  readByType: 'user' | 'driver';
+  timestamp: number;
+}) => void;
+
 // Configuration for socket connection
 const SOCKET_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_SOCKET_URL || process.env.EXPO_PUBLIC_SOCKET_URL || 'https://testsocketio-roqet.up.railway.app';
 
@@ -128,6 +167,12 @@ class SocketManager {
   private onDriverCancellationErrorCallback: DriverCancellationErrorCallback | null = null;
   private onDriverLocationUpdateCallback: DriverLocationUpdateCallback | null = null;
   private onConnectionChangeCallback: ((connected: boolean) => void) | null = null;
+  
+  // Chat event callbacks
+  private onChatMessageCallback: ChatMessageCallback | null = null;
+  private onChatHistoryCallback: ChatHistoryCallback | null = null;
+  private onTypingIndicatorCallback: TypingIndicatorCallback | null = null;
+  private onMessagesReadCallback: MessagesReadCallback | null = null;
 
   connect(driverId: string) {
     if (this.socket && this.isConnected) {
@@ -365,6 +410,41 @@ class SocketManager {
       console.log('📍 Driver location update received:', data);
       this.onDriverLocationUpdateCallback?.(data);
     });
+
+    // Chat event listeners
+    this.socket.on('receive_chat_message', (data) => {
+      console.log('💬 Received chat message:', data);
+      this.onChatMessageCallback?.(data);
+    });
+
+    this.socket.on('chat_history', (data) => {
+      console.log('📚 Received chat history:', data);
+      this.onChatHistoryCallback?.(data);
+    });
+
+    this.socket.on('typing_indicator', (data) => {
+      console.log('⌨️ Typing indicator:', data);
+      this.onTypingIndicatorCallback?.(data);
+    });
+
+    this.socket.on('messages_read', (data) => {
+      console.log('👁️ Messages read:', data);
+      this.onMessagesReadCallback?.(data);
+    });
+
+    this.socket.on('chat_message_sent', (data) => {
+      console.log('✅ Chat message sent successfully:', data);
+    });
+
+    this.socket.on('chat_message_error', (data) => {
+      console.log('❌ Chat message error:', data);
+      Alert.alert('Chat Error', data.message || 'Failed to send message.');
+    });
+
+    this.socket.on('chat_history_error', (data) => {
+      console.log('❌ Chat history error:', data);
+      Alert.alert('Chat Error', data.message || 'Failed to load chat history.');
+    });
   }
 
   disconnect() {
@@ -571,6 +651,84 @@ class SocketManager {
     this.onConnectionChangeCallback = callback;
   }
 
+  // Chat callback setters
+  onChatMessage(callback: ChatMessageCallback) {
+    this.onChatMessageCallback = callback;
+  }
+
+  onChatHistory(callback: ChatHistoryCallback) {
+    this.onChatHistoryCallback = callback;
+  }
+
+  onTypingIndicator(callback: TypingIndicatorCallback) {
+    this.onTypingIndicatorCallback = callback;
+  }
+
+  onMessagesRead(callback: MessagesReadCallback) {
+    this.onMessagesReadCallback = callback;
+  }
+
+  // Chat methods
+  sendChatMessage(data: {
+    rideId: string;
+    senderId: string;
+    senderType: 'user' | 'driver';
+    message: string;
+  }) {
+    if (this.socket && this.isConnected) {
+      console.log("💬 Sending chat message:", data);
+      this.socket.emit("send_chat_message", data);
+    } else {
+      console.error("❌ Cannot send chat message: Socket not connected");
+    }
+  }
+
+  getChatHistory(data: {
+    rideId: string;
+    requesterId: string;
+    requesterType: 'user' | 'driver';
+  }) {
+    if (this.socket && this.isConnected) {
+      console.log("📚 Requesting chat history:", data);
+      this.socket.emit("get_chat_history", data);
+    } else {
+      console.error("❌ Cannot get chat history: Socket not connected");
+    }
+  }
+
+  markMessagesAsRead(data: {
+    rideId: string;
+    readerId: string;
+    readerType: 'user' | 'driver';
+  }) {
+    if (this.socket && this.isConnected) {
+      console.log("👁️ Marking messages as read:", data);
+      this.socket.emit("mark_messages_read", data);
+    } else {
+      console.error("❌ Cannot mark messages as read: Socket not connected");
+    }
+  }
+
+  sendTypingStart(data: {
+    rideId: string;
+    senderId: string;
+    senderType: 'user' | 'driver';
+  }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("typing_start", data);
+    }
+  }
+
+  sendTypingStop(data: {
+    rideId: string;
+    senderId: string;
+    senderType: 'user' | 'driver';
+  }) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("typing_stop", data);
+    }
+  }
+
   // Clear all callbacks
   clearCallbacks() {
     this.onRideRequestCallback = null;
@@ -584,6 +742,12 @@ class SocketManager {
     this.onDriverCancellationErrorCallback = null;
     this.onDriverLocationUpdateCallback = null;
     this.onConnectionChangeCallback = null;
+    
+    // Clear chat callbacks
+    this.onChatMessageCallback = null;
+    this.onChatHistoryCallback = null;
+    this.onTypingIndicatorCallback = null;
+    this.onMessagesReadCallback = null;
   }
 
   // New methods for APK compatibility

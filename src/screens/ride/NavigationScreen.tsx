@@ -413,6 +413,25 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Full Route (Pickup → Dropoff)</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={{ backgroundColor: '#007AFF', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#007AFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            onPress={() => {
+              console.log('🔗 Navigating to Chat with data:', {
+                ride: { rideId: ride.rideId },
+                user: { name: ride.customerName || 'Customer' },
+                driverId: ride.driverId || 'driver123'
+              });
+              navigation.navigate('Chat', {
+                ride: { rideId: ride.rideId },
+                user: { name: ride.customerName || 'Customer' },
+                driverId: ride.driverId || 'driver123'
+              });
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Chat with Customer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={{ backgroundColor: '#00C853', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#00C853', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
             onPress={() => {
               // Send driver_arrived event to server
