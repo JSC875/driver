@@ -324,7 +324,11 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
             <Ionicons name="gift" size={26} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Refer</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('RideHistory'); onClose(); }}>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { 
+            console.log('🚀 Ride History button clicked - navigating to RideHistory screen');
+            onNavigate('RideHistory'); 
+            onClose(); 
+          }}>
             <Ionicons name="time" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Ride History</Text>
           </TouchableOpacity>
