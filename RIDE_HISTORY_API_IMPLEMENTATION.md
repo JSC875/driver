@@ -9,6 +9,7 @@ This implementation adds API integration to the Ride History feature in the driv
 - **Endpoint**: `GET https://bike-taxi-production.up.railway.app/api/drivers/me/rides`
 - **Authentication**: Uses Bearer token from Clerk's `useAuth()` hook
 - **Response Handling**: Transforms API response to match the app's data structure
+- **Data Sorting**: Sorts rides by date (latest first) for better UX
 - **Error Handling**: Proper error handling with detailed logging
 
 ### 2. Context Integration (`src/store/RideHistoryContext.tsx`)
@@ -22,6 +23,7 @@ This implementation adds API integration to the Ride History feature in the driv
 - **Authentication**: Gets token from Clerk's useAuth hook
 - **Single API Call**: Prevents multiple API calls using hasLoaded flag
 - **Auto-fetch**: Automatically fetches ride history when screen mounts (only once)
+- **Data Sorting**: Displays rides with latest first for better user experience
 - **Pull-to-refresh**: Users can pull down to refresh the ride history
 - **Loading Indicators**: Shows loading state during API calls
 - **Error Handling**: Displays error messages with retry functionality

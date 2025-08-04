@@ -69,7 +69,15 @@ export default function RideHistoryScreen({ navigation }: any) {
     }
   }, [hasLoaded]); // Only depend on hasLoaded to prevent multiple calls
 
-  const filteredRides = rides.filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'));
+  // Filter and sort rides (latest first)
+  const filteredRides = rides
+    .filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'))
+    .sort((a, b) => {
+      // Sort by requestedAt date (latest first)
+      const dateA = new Date(a.requestedAt || a.date).getTime();
+      const dateB = new Date(b.requestedAt || b.date).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
 
   const renderRideItem = ({ item, index }: any) => (
     <Animated.View

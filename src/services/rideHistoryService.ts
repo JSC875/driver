@@ -70,12 +70,20 @@ class RideHistoryService {
 
       // Transform the API response to match our RideHistoryItem interface
       const transformedData = this.transformApiResponse(data);
-      console.log('🔄 Transformed ride history data:', transformedData);
-      console.log('📊 Transformed data length:', transformedData.length);
+      
+      // Sort by requestedAt date (latest first)
+      const sortedData = transformedData.sort((a, b) => {
+        const dateA = new Date(a.requestedAt || a.date).getTime();
+        const dateB = new Date(b.requestedAt || b.date).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+      
+      console.log('🔄 Transformed and sorted ride history data:', sortedData);
+      console.log('📊 Transformed data length:', sortedData.length);
 
       return {
         success: true,
-        data: transformedData,
+        data: sortedData,
       };
     } catch (error) {
       console.error('❌ Error fetching ride history:', error);
