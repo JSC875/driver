@@ -34,17 +34,7 @@ export default function ProfileScreen() {
       setLoading(true);
       setError(null);
       try {
-        const key = 'clerkDriverId';
-        console.log('[ProfileScreen] Attempting to retrieve', key, 'from AsyncStorage...');
-        const clerkUserId = await AsyncStorage.getItem(key);
-        console.log('[ProfileScreen]', key, 'from AsyncStorage:', clerkUserId);
-        if (!clerkUserId) {
-          setError('No Clerk user ID found.');
-          console.error('[ProfileScreen] No Clerk user ID found in AsyncStorage.');
-          setLoading(false);
-          return;
-        }
-        // Get the token
+        // Get the token - the /api/drivers/me endpoint uses JWT authentication
         const token = await getToken();
         console.log('[ProfileScreen] Retrieved token:', token);
         if (!token) {
@@ -53,11 +43,18 @@ export default function ProfileScreen() {
           setLoading(false);
           return;
         }
-        const url = `https://roqet-production.up.railway.app/drivers/getDriverByClerkDriverId/${clerkUserId}`;
+        
+        // Use the correct endpoint with proper JWT authentication
+        const url = 'https://bike-taxi-production.up.railway.app/api/drivers/me';
         console.log('[ProfileScreen] Fetching driver details from:', url);
         const response = await fetch(url, {
+          method: 'GET',
           headers: {
-            Authorization: `Bearer ${token}`,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-App-Version': '1.0.0',
+            'X-Platform': 'ReactNative',
+            'X-Environment': 'development',
           },
         });
         console.log('[ProfileScreen] Response status:', response.status);
@@ -69,7 +66,7 @@ export default function ProfileScreen() {
         }
         const data = await response.json();
         console.log('[ProfileScreen] Backend response data:', data);
-        setDriverDetails(data.data);
+        setDriverDetails(data);
       } catch (err) {
         setError('An error occurred while fetching driver details.');
         console.error('[ProfileScreen] Error while fetching driver details:', err);

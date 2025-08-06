@@ -14,6 +14,8 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { mockRideHistory } from '../../data/mockData';
 import { useRideHistory } from '../../store/RideHistoryContext';
+import { RefreshControl } from 'react-native';
+import { useAuth } from '@clerk/clerk-expo';
 
 const { width } = Dimensions.get('window');
 
@@ -21,7 +23,8 @@ export default function RideHistoryScreen({ navigation }: any) {
   const [selectedTab, setSelectedTab] = useState('completed');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const { rides, clearHistory } = useRideHistory();
+  const { rides, loading, error, hasLoaded, clearHistory, refreshRideHistory } = useRideHistory();
+  const { getToken } = useAuth();
 
   useEffect(() => {
     Animated.parallel([
@@ -37,9 +40,44 @@ export default function RideHistoryScreen({ navigation }: any) {
         friction: 8,
       }),
     ]).start();
+    
+    console.log('📱 RideHistoryScreen mounted - API call will be triggered automatically');
   }, []);
 
-  const filteredRides = rides.filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'));
+  // Separate useEffect for fetching ride history to avoid multiple calls
+  useEffect(() => {
+    // Only fetch if not already loaded
+    if (!hasLoaded) {
+      const loadRideHistory = async () => {
+        try {
+          const token = await getToken();
+          console.log('🔑 Retrieved auth token for ride history:', token ? 'Available' : 'Not available');
+          
+          if (token) {
+            await refreshRideHistory(token);
+          } else {
+            console.error('❌ No authentication token available');
+          }
+        } catch (error) {
+          console.error('❌ Error loading ride history:', error);
+        }
+      };
+      
+      loadRideHistory();
+    } else {
+      console.log('📱 Ride history already loaded, skipping API call');
+    }
+  }, [hasLoaded]); // Only depend on hasLoaded to prevent multiple calls
+
+  // Filter and sort rides (latest first)
+  const filteredRides = rides
+    .filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'))
+    .sort((a, b) => {
+      // Sort by requestedAt date (latest first)
+      const dateA = new Date(a.requestedAt || a.date).getTime();
+      const dateB = new Date(b.requestedAt || b.date).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
 
   const renderRideItem = ({ item, index }: any) => (
     <Animated.View
@@ -113,8 +151,26 @@ export default function RideHistoryScreen({ navigation }: any) {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ride History</Text>
-        <TouchableOpacity style={styles.filterButton} activeOpacity={0.7}>
-          <Ionicons name="filter" size={24} color={Colors.text} />
+        <TouchableOpacity 
+          style={styles.filterButton} 
+          activeOpacity={0.7}
+          onPress={async () => {
+            try {
+              const token = await getToken();
+              if (token) {
+                await refreshRideHistory(token);
+              }
+            } catch (error) {
+              console.error('❌ Error refreshing ride history:', error);
+            }
+          }}
+          disabled={loading}
+        >
+          {loading ? (
+            <Ionicons name="refresh" size={24} color={Colors.primary} />
+          ) : (
+            <Ionicons name="refresh" size={24} color={Colors.text} />
+          )}
         </TouchableOpacity>
       </Animated.View>
 
@@ -163,6 +219,56 @@ export default function RideHistoryScreen({ navigation }: any) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={async () => {
+              try {
+                const token = await getToken();
+                if (token) {
+                  await refreshRideHistory(token);
+                }
+              } catch (error) {
+                console.error('❌ Error refreshing ride history:', error);
+              }
+            }}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading ride history...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={48} color={Colors.error} />
+                <Text style={styles.errorText}>Failed to load ride history</Text>
+                <Text style={styles.errorSubtext}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={async () => {
+                  try {
+                    const token = await getToken();
+                    if (token) {
+                      await refreshRideHistory(token);
+                    }
+                  } catch (error) {
+                    console.error('❌ Error retrying ride history:', error);
+                  }
+                }}>
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Ionicons name="time" size={48} color={Colors.gray400} />
+                <Text style={styles.emptyStateText}>No ride history yet</Text>
+                <Text style={styles.emptyStateSubtext}>Your completed rides will appear here</Text>
+              </View>
+            )}
+          </View>
+        }
       />
       {/* Clear History Button */}
       <TouchableOpacity style={{ alignSelf: 'center', margin: 16 }} onPress={clearHistory}>
@@ -381,5 +487,65 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     fontWeight: '600',
     color: Colors.white,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.md,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.lg,
+  },
+  errorText: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: Layout.spacing.md,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.sm,
+    textAlign: 'center',
+    marginBottom: Layout.spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.lg,
+    paddingVertical: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+  emptyStateContainer: {
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.lg,
+  },
+  emptyStateText: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: Layout.spacing.md,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: Layout.spacing.sm,
+    textAlign: 'center',
   },
 });

@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { OnlineStatusProvider } from './src/store/OnlineStatusContext';
 import { RideHistoryProvider } from './src/store/RideHistoryContext';
+import { ChatProvider } from './src/store/ChatContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const tokenCache = {
@@ -71,7 +72,9 @@ export default function App() {
             <OnlineStatusProvider>
               <StatusBar style="dark" backgroundColor="#ffffff" />
               <SocketInitializer />
-              <AppNavigator />
+              <ChatProvider>
+                <AppNavigator />
+              </ChatProvider>
             </OnlineStatusProvider>
           </SafeAreaProvider>
         </ClerkProvider>

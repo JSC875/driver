@@ -286,6 +286,19 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
     }
   };
 
+  const handleChat = () => {
+    console.log('🔗 Navigating to Chat with data:', { 
+      ride: { rideId: ride.rideId },
+      user: { name: ride.customerName || 'Customer' },
+      driverId: ride.driverId || 'driver123'
+    });
+    navigation.navigate('Chat', { 
+      ride: { rideId: ride.rideId },
+      user: { name: ride.customerName || 'Customer' },
+      driverId: ride.driverId || 'driver123'
+    });
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
       {/* Full Screen Map */}
@@ -414,6 +427,29 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
           >
             <Ionicons name="flag" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={{ 
+              backgroundColor: '#007AFF', 
+              borderRadius: 16, 
+              paddingVertical: 18, 
+              paddingHorizontal: 32, 
+              width: '100%', 
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              shadowColor: '#007AFF',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={handleChat}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Chat with Customer</Text>
           </TouchableOpacity>
           
           <TouchableOpacity

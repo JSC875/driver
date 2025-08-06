@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,32 +9,25 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
+import socketManager from '../../utils/socket';
+import { useAuth } from '@clerk/clerk-expo';
+import { getUserIdFromJWT } from '../../utils/jwtDecoder';
 
-const mockMessages = [
-  {
-    id: '1',
-    text: 'Hi! I\'m on my way to pick you up.',
-    sender: 'driver',
-    timestamp: '2:30 PM',
-  },
-  {
-    id: '2',
-    text: 'Great! I\'ll be waiting at the main gate.',
-    sender: 'user',
-    timestamp: '2:31 PM',
-  },
-  {
-    id: '3',
-    text: 'I\'m wearing a blue shirt. ETA 3 minutes.',
-    sender: 'driver',
-    timestamp: '2:32 PM',
-  },
-];
+interface ChatMessage {
+  id: string;
+  rideId: string;
+  senderId: string;
+  senderType: 'user' | 'driver';
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+}
 
 const quickReplies = [
   'I\'m here',
@@ -44,58 +37,262 @@ const quickReplies = [
 ];
 
 export default function ChatScreen({ navigation, route }: any) {
-  const { driver } = route.params;
-  const [messages, setMessages] = useState(mockMessages);
+  const { ride, user } = route.params;
+  const { getToken, isLoaded } = useAuth();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [driverId, setDriverId] = useState('');
+  const flatListRef = useRef<FlatList>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const rideId = ride?.rideId || '';
+
+  // Get driver ID from JWT when component mounts
+  useEffect(() => {
+    const getDriverId = async () => {
+      if (isLoaded) {
+        try {
+          const id = await getUserIdFromJWT(getToken);
+          console.log('🔑 Got driver ID from JWT:', id);
+          setDriverId(id);
+        } catch (error) {
+          console.error('❌ Error getting driver ID from JWT:', error);
+          // Try to get from route params as fallback
+          const fallbackId = route.params?.driverId || 'driver123';
+          console.log('🔄 Using fallback driver ID:', fallbackId);
+          setDriverId(fallbackId);
+        }
+      }
+    };
+
+    getDriverId();
+  }, [isLoaded, getToken, route.params]);
+
+  console.log('🔍 Driver ChatScreen Debug:', {
+    routeParams: route.params,
+    ride,
+    user,
+    driverId,
+    rideId,
+    isLoaded
+  });
+
+  // Add more detailed debugging
+  useEffect(() => {
+    console.log('🔍 Driver ChatScreen Mount Debug:', {
+      routeParams: route.params,
+      ride: ride,
+      rideId: ride?.rideId,
+      user: user,
+      driverId: driverId,
+      isLoaded: isLoaded
+    });
+  }, [route.params, driverId, isLoaded]);
+
+  useEffect(() => {
+    // Wait for auth to be loaded and driverId to be set
+    if (!isLoaded) {
+      console.log('⏳ Waiting for auth to load...');
+      return;
+    }
+
+    if (!driverId) {
+      console.log('⏳ Waiting for driver ID to be set...');
+      return;
+    }
+
+    if (!rideId) {
+      console.error('❌ Missing ride ID:', { rideId });
+      Alert.alert('Error', 'Missing ride information');
+      navigation.goBack();
+      return;
+    }
+
+    console.log('✅ All data available, setting up chat:', { driverId, rideId });
+
+    // Set up chat event listeners
+    socketManager.onChatMessage((message) => {
+      console.log('💬 Received chat message:', message);
+      setMessages(prev => [...prev, message]);
+      
+      // Mark message as read if it's from user
+      if (message.senderType === 'user') {
+        socketManager.markMessagesAsRead({
+          rideId: message.rideId,
+          readerId: driverId,
+          readerType: 'driver'
+        });
+      }
+    });
+
+    socketManager.onChatHistory((data) => {
+      console.log('📚 Received chat history:', data);
+      setMessages(data.messages);
+      setIsLoading(false);
+    });
+
+    socketManager.onTypingIndicator((data) => {
+      console.log('⌨️ Typing indicator:', data);
+      if (data.senderType === 'user') {
+        setIsUserTyping(data.isTyping);
+      }
+    });
+
+    socketManager.onMessagesRead((data) => {
+      console.log('👁️ Messages read:', data);
+      // Update read status for messages
+      setMessages(prev => prev.map(msg => ({
+        ...msg,
+        isRead: msg.senderType === 'driver' ? true : msg.isRead
+      })));
+    });
+
+    // Load chat history
+    loadChatHistory();
+
+    return () => {
+      // Clean up typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [driverId, rideId, isLoaded]);
+
+  const loadChatHistory = () => {
+    if (driverId && rideId) {
+      socketManager.getChatHistory({
+        rideId: rideId,
+        requesterId: driverId,
+        requesterType: 'driver'
+      });
+    }
+  };
 
   const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message = {
-        id: Date.now().toString(),
-        text: newMessage.trim(),
-        sender: 'user',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    if (newMessage.trim() && driverId && rideId) {
+      const messageData = {
+        rideId: rideId,
+        senderId: driverId,
+        senderType: 'driver' as const,
+        message: newMessage.trim()
       };
-      setMessages([...messages, message]);
+
+      socketManager.sendChatMessage(messageData);
       setNewMessage('');
+      
+      // Stop typing indicator
+      socketManager.sendTypingStop({
+        rideId: rideId,
+        senderId: driverId,
+        senderType: 'driver'
+      });
+      
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
     }
   };
 
   const handleQuickReply = (reply: string) => {
-    const message = {
-      id: Date.now().toString(),
-      text: reply,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMessages([...messages, message]);
+    setNewMessage(reply);
+    handleSendMessage();
   };
 
-  const renderMessage = ({ item }: any) => (
+  const handleTyping = (text: string) => {
+    setNewMessage(text);
+    
+    // Send typing start
+    if (text.length === 1 && driverId && rideId) {
+      socketManager.sendTypingStart({
+        rideId: rideId,
+        senderId: driverId,
+        senderType: 'driver'
+      });
+    }
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set new timeout for typing stop
+    typingTimeoutRef.current = setTimeout(() => {
+      if (driverId && rideId) {
+        socketManager.sendTypingStop({
+          rideId: rideId,
+          senderId: driverId,
+          senderType: 'driver'
+        });
+      }
+    }, 1000);
+  };
+
+  const renderMessage = ({ item }: { item: ChatMessage }) => (
     <View
       style={[
         styles.messageContainer,
-        item.sender === 'user' ? styles.userMessage : styles.driverMessage,
+        item.senderType === 'driver' ? styles.driverMessage : styles.userMessage,
       ]}
     >
       <Text
         style={[
           styles.messageText,
-          item.sender === 'user' ? styles.userMessageText : styles.driverMessageText,
+          item.senderType === 'driver' ? styles.driverMessageText : styles.userMessageText,
         ]}
       >
-        {item.text}
+        {item.message}
       </Text>
-      <Text
-        style={[
-          styles.timestamp,
-          item.sender === 'user' ? styles.userTimestamp : styles.driverTimestamp,
-        ]}
-      >
-        {item.timestamp}
-      </Text>
+      <View style={styles.messageFooter}>
+        <Text
+          style={[
+            styles.timestamp,
+            item.senderType === 'driver' ? styles.driverTimestamp : styles.userTimestamp,
+          ]}
+        >
+          {item.timestamp}
+        </Text>
+        {item.senderType === 'driver' && (
+          <Ionicons 
+            name={item.isRead ? "checkmark-done" : "checkmark"} 
+            size={12} 
+            color={item.isRead ? Colors.success : Colors.gray400} 
+            style={styles.readIndicator}
+          />
+        )}
+      </View>
     </View>
   );
+
+  const renderTypingIndicator = () => {
+    if (!isUserTyping) return null;
+    
+    return (
+      <View style={[styles.messageContainer, styles.userMessage]}>
+        <View style={styles.typingIndicator}>
+          <View style={styles.typingDot} />
+          <View style={styles.typingDot} />
+          <View style={styles.typingDot} />
+        </View>
+      </View>
+    );
+  };
+
+  // Show loading if auth is not loaded yet or driver ID is not set
+  if (!isLoaded || !driverId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>
+            {!isLoaded ? 'Loading chat...' : 'Getting driver information...'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -108,8 +305,10 @@ export default function ChatScreen({ navigation, route }: any) {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.driverName}>{driver.name}</Text>
-          <Text style={styles.driverStatus}>Online</Text>
+          <Text style={styles.userName}>{user?.name || 'Customer'}</Text>
+          <Text style={styles.userStatus}>
+            {isUserTyping ? 'Typing...' : 'Online'}
+          </Text>
         </View>
         <TouchableOpacity style={styles.callButton}>
           <Ionicons name="call" size={24} color={Colors.primary} />
@@ -118,12 +317,27 @@ export default function ChatScreen({ navigation, route }: any) {
 
       {/* Messages */}
       <FlatList
+        ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         style={styles.messagesList}
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        ListFooterComponent={renderTypingIndicator}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading messages...</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No messages yet</Text>
+              <Text style={styles.emptySubtext}>Start a conversation with your customer</Text>
+            </View>
+          )
+        }
       />
 
       {/* Quick Replies */}
@@ -155,9 +369,10 @@ export default function ChatScreen({ navigation, route }: any) {
             style={styles.textInput}
             placeholder="Type a message..."
             value={newMessage}
-            onChangeText={setNewMessage}
+            onChangeText={handleTyping}
             multiline
             maxLength={500}
+            onSubmitEditing={handleSendMessage}
           />
           <TouchableOpacity
             style={[
@@ -199,12 +414,12 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
   },
-  driverName: {
+  userName: {
     fontSize: Layout.fontSize.lg,
     fontWeight: '600',
     color: Colors.text,
   },
-  driverStatus: {
+  userStatus: {
     fontSize: Layout.fontSize.sm,
     color: Colors.success,
   },
@@ -316,5 +531,52 @@ const styles = StyleSheet.create({
   },
   sendButtonActive: {
     backgroundColor: Colors.primary,
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Layout.spacing.xs,
+  },
+  readIndicator: {
+    marginLeft: Layout.spacing.xs,
+  },
+  typingIndicator: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginTop: Layout.spacing.xs,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.textSecondary,
+    marginHorizontal: 2,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: Layout.fontSize.md,
+    color: Colors.textSecondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Layout.spacing.lg,
+  },
+  emptyText: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: Layout.spacing.sm,
+  },
+  emptySubtext: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
 });

@@ -31,6 +31,13 @@ export interface RideRequest {
   price: number;
   userId: string;
   timestamp: number;
+  // Fields provided by Socket.IO server with original backend ride ID
+  backendRideId?: string;
+  originalRideId?: string;
+  // Additional fields that might contain the original backend ride ID
+  estimatedFare?: number;
+  status?: string;
+  [key: string]: any; // Allow additional fields
 }
 
 interface AcceptedRideDetails {
@@ -161,6 +168,10 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     socketManager.onRideRequest((data) => {
       console.log('🚗 New ride request received in context:', data);
+      console.log('🔍 Ride request rideId:', data.rideId);
+      console.log('🔍 Full ride request data:', JSON.stringify(data, null, 2));
+      console.log('🔍 All available fields:', Object.keys(data));
+      console.log('🔍 Field values:', Object.values(data));
       
       // Check if we're currently accepting a ride
       if (acceptingRideId) {
@@ -303,6 +314,33 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const acceptRide = async (rideRequest: RideRequest) => {
     console.log('✅ Accepting ride:', rideRequest);
+    console.log('🔍 Ride ID from Socket.IO:', rideRequest.rideId);
+    console.log('🔍 Full ride request data:', JSON.stringify(rideRequest, null, 2));
+    
+    // Try to extract the original backend ride ID
+    let backendRideId = rideRequest.rideId;
+    
+    // Check if the rideId is in Socket.IO format (ride_timestamp_random)
+    if (rideRequest.rideId.startsWith('ride_')) {
+      console.log('⚠️ Detected Socket.IO ride ID format, attempting to extract original backend ride ID...');
+      
+      // Look for the original backend ride ID in the backendRideId field (provided by Socket.IO server)
+      if (rideRequest.backendRideId && !rideRequest.backendRideId.startsWith('ride_')) {
+        console.log('✅ Found original backend ride ID in backendRideId field:', rideRequest.backendRideId);
+        backendRideId = rideRequest.backendRideId;
+      } else if (rideRequest.originalRideId && !rideRequest.originalRideId.startsWith('ride_')) {
+        console.log('✅ Found original backend ride ID in originalRideId field:', rideRequest.originalRideId);
+        backendRideId = rideRequest.originalRideId;
+      } else {
+        console.log('❌ Could not find original backend ride ID');
+        console.log('🔍 Available fields:', Object.keys(rideRequest));
+        console.log('🔍 All field values:', Object.values(rideRequest));
+        console.log('🔍 backendRideId:', rideRequest.backendRideId);
+        console.log('🔍 originalRideId:', rideRequest.originalRideId);
+      }
+    } else {
+      console.log('✅ Using ride ID as-is (appears to be backend format):', backendRideId);
+    }
     
     // Check if we're already accepting a ride
     if (acceptingRideId) {
@@ -339,23 +377,73 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!clerkDriverId) {
         console.error('[acceptRide] No clerkDriverId found in AsyncStorage');
       } else {
-        const url = `https://roqet-production.up.railway.app/rides/accept?rideId=${rideRequest.rideId}&clerkDriverId=${clerkDriverId}`;
+        const url = `https://bike-taxi-production.up.railway.app/api/rides/${backendRideId}/accept`;
         console.log('[acceptRide] Hitting backend endpoint:', url);
+        console.log('[acceptRide] Using ride ID:', backendRideId);
+        console.log('[acceptRide] Expected backend ride ID format: UUID (e.g., dd75ffcd-5cb7-4721-a68e-89ee4485c4dd)');
+        console.log('[acceptRide] Actual ride ID being used:', backendRideId);
+        
         // Get the Bearer token using the correct template
         const token = await getToken({ template: 'driver_app_token' });
         if (!token) {
           console.error('[acceptRide] No auth token found.');
         } else {
           const response = await fetch(url, {
-            method: 'POST',
+            method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json',
+              'X-App-Version': '1.0.0',
+              'X-Platform': 'ReactNative',
+              'X-Environment': 'development',
             },
+            body: JSON.stringify({
+              driverId: clerkDriverId,
+              driverName: 'Driver Name', // This should come from user data
+              driverPhone: '+1234567890',
+              estimatedArrival: '5 minutes'
+            }),
           });
           console.log('[acceptRide] Backend response status:', response.status);
           const data = await response.json().catch(() => null);
           console.log('[acceptRide] Backend response data:', data);
+          
+          if (response.ok) {
+            console.log('✅ Ride accepted successfully via backend API');
+            
+            // Now call the start endpoint
+            try {
+              const startUrl = `https://bike-taxi-production.up.railway.app/api/rides/${backendRideId}/start`;
+              console.log('[acceptRide] Hitting start endpoint:', startUrl);
+              
+              const startResponse = await fetch(startUrl, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                  'X-App-Version': '1.0.0',
+                  'X-Platform': 'ReactNative',
+                  'X-Environment': 'development',
+                },
+              });
+              
+              console.log('[acceptRide] Start endpoint response status:', startResponse.status);
+              const startData = await startResponse.json().catch(() => null);
+              console.log('[acceptRide] Start endpoint response data:', startData);
+              
+              if (startResponse.ok) {
+                console.log('✅ Ride started successfully via backend API');
+              } else {
+                console.error('❌ Failed to start ride via backend API:', startResponse.status);
+                console.error('❌ Start response data:', startData);
+              }
+            } catch (startErr) {
+              console.error('[acceptRide] Error calling backend start endpoint:', startErr);
+            }
+          } else {
+            console.error('❌ Failed to accept ride via backend API:', response.status);
+            console.error('❌ Response data:', data);
+          }
         }
       }
     } catch (err) {

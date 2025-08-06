@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Animated, SafeAreaView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@clerk/clerk-expo';
 import socketManager from '../../utils/socket';
+import rideService from '../../services/rideService';
 
 interface OtpScreenProps {
   route: any;
@@ -10,6 +12,7 @@ interface OtpScreenProps {
 
 export default function OtpScreen({ route, navigation }: OtpScreenProps) {
   const { ride } = route.params;
+  const { getToken } = useAuth();
   
   console.log('🔐 OtpScreen received ride data:', ride);
   console.log('🔐 rideId:', ride?.rideId);
@@ -17,6 +20,7 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
   const [otp, setOtp] = useState(['', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const anim = React.useRef(new Animated.Value(0)).current;
   const checkAnim = React.useRef(new Animated.Value(0)).current;
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -30,7 +34,7 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
     }).start();
   }, []);
 
-  // Listen for driver cancellation success
+  // Listen for driver cancellation success and ride started events
   React.useEffect(() => {
     const socket = socketManager.getSocket();
     if (socket) {
@@ -40,13 +44,24 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         navigation.navigate('Home');
       };
 
+      const handleRideStarted = (data: any) => {
+        console.log('🚀 Ride started event received in OtpScreen:', data);
+        if (data.rideId === ride.rideId) {
+          console.log('✅ Ride started, navigating to RideInProgressScreen');
+          // Navigate to ride in progress screen
+          navigation.navigate('RideInProgressScreen', { ride });
+        }
+      };
+
       socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+      socket.on('ride_started', handleRideStarted);
 
       return () => {
         socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+        socket.off('ride_started', handleRideStarted);
       };
     }
-  }, [navigation]);
+  }, [navigation, ride.rideId]);
 
   const handleChange = (val: string, idx: number) => {
     if (!/^[0-9]?$/.test(val)) return;
@@ -69,35 +84,74 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!otp.every(d => d)) {
       Alert.alert('Incomplete OTP', 'Please enter all 4 digits');
       return;
     }
 
+    if (isVerifying) return; // Prevent multiple submissions
+
+    setIsVerifying(true);
     setSubmitted(true);
-    Animated.sequence([
-      Animated.timing(checkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.delay(600),
-    ]).start(() => {
+
+    try {
       // Get the entered OTP
       const enteredOtp = otp.join('');
       console.log('🔐 Driver entered OTP:', enteredOtp);
       
-      // Send OTP to server for verification
-      socketManager.sendOtp({
-        rideId: ride.rideId,
-        driverId: ride.driverId,
-        otp: enteredOtp
-      });
+      // Get authentication token
+      const token = await getToken({ template: 'driver_app_token', skipCache: true });
       
-      console.log('🔐 Sent OTP to server for verification');
+      // Step 1: Call API endpoint to verify OTP
+      console.log('🔐 Calling API to verify OTP...');
+      const apiResponse = await rideService.verifyOtp(ride.rideId, enteredOtp, token);
       
-      // Navigate to ride in progress screen
-      navigation.navigate('RideInProgressScreen', { ride });
+      if (apiResponse.success) {
+        console.log('✅ OTP verified successfully via API');
+        
+        // Step 2: Also emit socket.io event for real-time communication
+        console.log('🔐 Emitting socket.io OTP verification event...');
+        socketManager.sendOtp({
+          rideId: ride.rideId,
+          driverId: ride.driverId,
+          otp: enteredOtp
+        });
+        
+        console.log('✅ OTP verification sent via both API and socket.io');
+        
+        // Step 3: Show success animation and wait for ride_started event
+        Animated.sequence([
+          Animated.timing(checkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.delay(600),
+        ]).start(() => {
+          console.log('✅ OTP verification successful, waiting for ride_started event...');
+          
+          // Don't navigate here - wait for ride_started socket event
+          setSubmitted(false);
+          checkAnim.setValue(0);
+          setIsVerifying(false);
+        });
+        
+      } else {
+        console.error('❌ API OTP verification failed:', apiResponse.error);
+        Alert.alert(
+          'OTP Verification Failed', 
+          apiResponse.error || 'Incorrect OTP. Please try again.'
+        );
+        setSubmitted(false);
+        setIsVerifying(false);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error verifying OTP:', error);
+      Alert.alert(
+        'Verification Error', 
+        'Failed to verify OTP. Please check your connection and try again.'
+      );
       setSubmitted(false);
-      checkAnim.setValue(0);
-    });
+      setIsVerifying(false);
+    }
   };
 
   // Function to cancel the ride
@@ -180,16 +234,19 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
               onKeyPress={e => handleKeyPress(e, idx)}
               returnKeyType="done"
               autoFocus={idx === 0}
+              editable={!isVerifying}
             />
           ))}
         </View>
         <TouchableOpacity
-          style={{ backgroundColor: otp.every(d => d) ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12 }}
+          style={{ backgroundColor: otp.every(d => d) && !isVerifying ? '#1877f2' : '#b0b0b0', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12 }}
           onPress={handleSubmit}
-          disabled={!otp.every(d => d)}
-          activeOpacity={otp.every(d => d) ? 0.8 : 1}
+          disabled={!otp.every(d => d) || isVerifying}
+          activeOpacity={otp.every(d => d) && !isVerifying ? 0.8 : 1}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>Submit OTP</Text>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 20, letterSpacing: 1 }}>
+            {isVerifying ? 'Verifying...' : 'Submit OTP'}
+          </Text>
         </TouchableOpacity>
         {/* <TouchableOpacity
           style={{ backgroundColor: '#ff4444', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}

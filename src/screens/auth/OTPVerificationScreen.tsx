@@ -13,10 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSignIn, useSignUp } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp, useUser, useAuth } from '@clerk/clerk-expo';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+import { logJWTDetails } from '../../utils/jwtDecoder';
 
 export default function OTPVerificationScreen({ navigation, route }: any) {
   const { phoneNumber, isSignIn } = route.params;
@@ -27,6 +28,8 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   
   const { signIn, setActive: setSignInActive } = useSignIn();
   const { signUp, setActive: setSignUpActive } = useSignUp();
+  const { user } = useUser();
+  const { getToken } = useAuth();
   
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -161,6 +164,29 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
           console.log('OTPVerificationScreen - Sign in successful, setting active session...');
           console.log('OTPVerificationScreen - Created session ID:', completeSignIn.createdSessionId);
           
+          // Set userType in Clerk metadata for sign-in
+          if (user) {
+            try {
+              await user.update({
+                unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+              });
+              console.log('OTPVerificationScreen - User type set to driver (sign-in)');
+              
+              // Force new JWT with updated userType
+              if (typeof getToken === 'function') {
+                const newToken = await getToken({ template: 'driver_app_token', skipCache: true });
+                console.log('OTPVerificationScreen - New JWT with userType (sign-in):', newToken ? 'Generated' : 'Failed');
+                
+                // Log the JWT details to verify custom fields
+                if (newToken) {
+                  await logJWTDetails(getToken, 'OTP Sign-In JWT Analysis');
+                }
+              }
+            } catch (metadataErr) {
+              console.error('OTPVerificationScreen - Error setting user type (sign-in):', metadataErr);
+            }
+          }
+          
           if (setSignInActive) {
             await setSignInActive({ session: completeSignIn.createdSessionId });
             console.log('OTPVerificationScreen - Session activated successfully');
@@ -197,6 +223,29 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
         if (isPhoneVerified) {
           console.log('OTPVerificationScreen - Phone verification successful!');
           console.log('OTPVerificationScreen - Missing fields:', completeSignUp?.missingFields);
+          
+          // Set userType in Clerk metadata immediately after phone verification
+          if (user) {
+            try {
+              await user.update({
+                unsafeMetadata: { ...user.unsafeMetadata, type: 'driver' }
+              });
+              console.log('OTPVerificationScreen - User type set to driver');
+              
+              // Force new JWT with updated userType
+              if (typeof getToken === 'function') {
+                const newToken = await getToken({ template: 'driver_app_token', skipCache: true });
+                console.log('OTPVerificationScreen - New JWT with userType:', newToken ? 'Generated' : 'Failed');
+                
+                // Log the JWT details to verify custom fields
+                if (newToken) {
+                  await logJWTDetails(getToken, 'OTP Verification JWT Analysis');
+                }
+              }
+            } catch (metadataErr) {
+              console.error('OTPVerificationScreen - Error setting user type:', metadataErr);
+            }
+          }
           
           if (setSignUpActive && completeSignUp.createdSessionId) {
             await setSignUpActive({ session: completeSignUp.createdSessionId });
