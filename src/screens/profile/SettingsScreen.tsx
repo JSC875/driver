@@ -187,8 +187,7 @@ export default function SettingsScreen({ navigation }: any) {
 
         {/* App Info */}
         <Animated.View style={[styles.appInfo, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.appVersion}>RideSwift v1.0.0</Text>
-          <Text style={styles.appBuild}>Build 2024.01.15</Text>
+          
         </Animated.View>
       </ScrollView>
     </SafeAreaView>

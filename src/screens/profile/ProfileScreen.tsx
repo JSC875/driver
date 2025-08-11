@@ -162,10 +162,10 @@ export default function ProfileScreen() {
                 <Text style={styles.detailLabel}>Phone:</Text>
                 <Text style={styles.detailValue}>{driverDetails.phoneNumber}</Text>
               </View>
-              <View style={styles.detailRow}>
+              {/* <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>User Type:</Text>
                 <Text style={styles.detailValue}>{driverDetails.userType}</Text>
-              </View>
+              </View> */}
               {/* Add more fields as needed */}
             </>
           ) : (
