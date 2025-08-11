@@ -17,6 +17,7 @@ const mockTrip = {
 const menuItems = [
   { key: 'ride', label: 'Ride Issues', screen: 'RideIssues', icon: 'car-outline' },
   { key: 'payments', label: 'Payments and Refunds', screen: 'PaymentsIssues', icon: 'card-outline' },
+
   { key: 'account', label: 'Account related issues', screen: 'AccountIssues', icon: 'person-outline' },
   { key: 'other', label: 'Other Issues', screen: 'OtherIssues', icon: 'help-circle-outline' },
 ];

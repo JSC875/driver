@@ -70,7 +70,7 @@ export default function ReferScreen() {
   );
 }
 
-const COUPON_HEIGHT = 70;
+const COUPON_HEIGHT = 100;
 
 const styles = StyleSheet.create({
   container: {
@@ -187,14 +187,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   coupon: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 2,
     color: '#222',
     backgroundColor: '#eaf0fb',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 7,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
     marginRight: 8,
     borderWidth: 1,
     borderColor: '#dbeafe',

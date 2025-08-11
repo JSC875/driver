@@ -19,7 +19,6 @@ const { width } = Dimensions.get('window');
 export default function SettingsScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
   // const [locationServices, setLocationServices] = useState(true);
-  const [autoPayment, setAutoPayment] = useState(false);
   const [shareData, setShareData] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -81,9 +80,7 @@ export default function SettingsScreen({ navigation }: any) {
           icon: 'card-outline',
           title: 'Auto Payment',
           subtitle: 'Automatically pay for rides',
-          toggle: true,
-          value: autoPayment,
-          onToggle: setAutoPayment,
+          action: () => navigation.navigate('AutoPayment'),
         },
       ],
     },

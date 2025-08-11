@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+import { formatRidePrice } from '../../utils/priceUtils';
 import { mockDrivers } from '../../data/mockData';
 import * as Location from 'expo-location';
 import socketManager from '../../utils/socket';
@@ -113,7 +114,7 @@ export default function ConfirmRideScreen({ navigation, route }: any) {
             </View>
             <View style={styles.statItem}>
               <Ionicons name="cash" size={16} color={Colors.success} />
-              <Text style={styles.statText}>₹{estimate.fare}</Text>
+              <Text style={styles.statText}>{formatRidePrice(estimate.fare)}</Text>
             </View>
           </View>
         </View>
@@ -180,7 +181,7 @@ export default function ConfirmRideScreen({ navigation, route }: any) {
       <View style={styles.bottomAction}>
         <View style={styles.fareDisplay}>
           <Text style={styles.fareLabel}>Total Fare</Text>
-          <Text style={styles.fareValue}>₹{estimate.fare}</Text>
+                      <Text style={styles.fareValue}>{formatRidePrice(estimate.fare)}</Text>
         </View>
         <Button
           title="Book Ride"

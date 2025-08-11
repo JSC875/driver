@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { formatRidePrice } from '../../utils/priceUtils';
 
 export default function FindingDriverScreen({ navigation, route }: any) {
   const { destination, estimate, paymentMethod, driver } = route.params;
@@ -95,7 +96,7 @@ export default function FindingDriverScreen({ navigation, route }: any) {
           <View style={styles.tripHeader}>
             <Text style={styles.tripTitle}>Trip Details</Text>
             <View style={styles.fareContainer}>
-              <Text style={styles.fareText}>₹{estimate.fare}</Text>
+              <Text style={styles.fareText}>{formatRidePrice(estimate.fare)}</Text>
             </View>
           </View>
 
