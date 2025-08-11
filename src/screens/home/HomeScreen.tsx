@@ -74,7 +74,7 @@ function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; on
       opacity: anim,
       zIndex: 10000,
     }}>
-      <Animated.View style={{
+      {/* <Animated.View style={{
         width: width - 40,
         backgroundColor: '#fff',
         borderRadius: 20,
@@ -164,7 +164,7 @@ function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; on
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel Ride</Text>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </Animated.View> */}
     </Animated.View>
   );
 }
