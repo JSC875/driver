@@ -58,7 +58,7 @@ export default function HelpSupportScreen({ navigation }: any) {
       </Animated.View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Recent Trip Card */}
-        <Animated.View style={[styles.tripCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        {/* <Animated.View style={[styles.tripCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.tripCardLeft}>
             <Image source={{ uri: mockTrip.map }} style={styles.mapImage} />
           </View>
@@ -70,7 +70,7 @@ export default function HelpSupportScreen({ navigation }: any) {
               <Text style={styles.getHelpLink}>Get Help</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </Animated.View> */}
         {/* Menu Items */}
         <Animated.View style={[styles.menuSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           {menuItems.map((item) => (

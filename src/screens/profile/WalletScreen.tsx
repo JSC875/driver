@@ -142,7 +142,7 @@ export default function WalletScreen({ navigation }: any) {
         >
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Wallet & Payments</Text>
+        <Text style={styles.headerTitle}>Wallet</Text>
         <TouchableOpacity style={styles.helpButton} activeOpacity={0.7}>
           <Ionicons name="help-circle-outline" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -150,7 +150,7 @@ export default function WalletScreen({ navigation }: any) {
 
       {/* Tabs */}
       <Animated.View style={[styles.tabsContainer, { opacity: fadeAnim }]}>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[
             styles.tab,
             selectedTab === 'wallet' && styles.activeTab,
@@ -166,8 +166,8 @@ export default function WalletScreen({ navigation }: any) {
           >
             Wallet
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </TouchableOpacity> */}
+        {/* <TouchableOpacity
           style={[
             styles.tab,
             selectedTab === 'payments' && styles.activeTab,
@@ -183,7 +183,7 @@ export default function WalletScreen({ navigation }: any) {
           >
             Payment Methods
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </Animated.View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -212,7 +212,7 @@ export default function WalletScreen({ navigation }: any) {
             <Animated.View style={[styles.quickAddCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <Text style={styles.quickAddTitle}>Quick Add</Text>
               <View style={styles.quickAddButtons}>
-                {[100, 200, 500, 1000].map((amount) => (
+                {[100, 200, 500].map((amount) => (
                   <TouchableOpacity key={amount} style={styles.quickAddButton} activeOpacity={0.7}>
                     <Text style={styles.quickAddText}>₹{amount}</Text>
                   </TouchableOpacity>

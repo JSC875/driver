@@ -18,7 +18,7 @@ const { width } = Dimensions.get('window');
 
 export default function SettingsScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
-  const [locationServices, setLocationServices] = useState(true);
+  // const [locationServices, setLocationServices] = useState(true);
   const [autoPayment, setAutoPayment] = useState(false);
   const [shareData, setShareData] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,14 +69,14 @@ export default function SettingsScreen({ navigation }: any) {
           value: notifications,
           onToggle: setNotifications,
         },
-        {
-          icon: 'location-outline',
-          title: 'Location Services',
-          subtitle: 'Allow location access for better experience',
-          toggle: true,
-          value: locationServices,
-          onToggle: setLocationServices,
-        },
+        // {
+        //   icon: 'location-outline',
+        //   title: 'Location Services',
+        //   subtitle: 'Allow location access for better experience',
+        //   toggle: true,
+        //   value: locationServices,
+        //   onToggle: setLocationServices,
+        // },
         {
           icon: 'card-outline',
           title: 'Auto Payment',
@@ -113,14 +113,14 @@ export default function SettingsScreen({ navigation }: any) {
           subtitle: 'Read our terms and conditions',
           action: () => navigation.navigate('TermsCondition'),
         },
-        {
-          icon: 'share-outline',
-          title: 'Data Sharing',
-          subtitle: 'Control how your data is shared',
-          toggle: true,
-          value: shareData,
-          onToggle: setShareData,
-        },
+        // {
+        //   icon: 'share-outline',
+        //   title: 'Data Sharing',
+        //   subtitle: 'Control how your data is shared',
+        //   toggle: true,
+        //   value: shareData,
+        //   onToggle: setShareData,
+        // },
       ],
     },
   ];
