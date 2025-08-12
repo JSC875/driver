@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
+import { formatRidePrice, formatPriceBreakdown } from '../../utils/priceUtils';
 
 export default function RideEstimateScreen({ navigation, route }: any) {
   const { destination } = route.params;
@@ -25,6 +26,9 @@ export default function RideEstimateScreen({ navigation, route }: any) {
     distanceFare: 45,
     timeFare: 15,
   };
+
+  // Apply price rounding for easier payment
+  const roundedEstimate = formatPriceBreakdown(rideEstimate);
 
   const paymentMethods = [
     { id: 'cash', name: 'Cash', icon: 'cash' },
@@ -105,24 +109,24 @@ export default function RideEstimateScreen({ navigation, route }: any) {
           
           <View style={styles.fareItem}>
             <Text style={styles.fareLabel}>Base Fare</Text>
-            <Text style={styles.fareValue}>₹{rideEstimate.baseFare}</Text>
+                          <Text style={styles.fareValue}>{formatRidePrice(roundedEstimate.baseFare)}</Text>
           </View>
           
           <View style={styles.fareItem}>
             <Text style={styles.fareLabel}>Distance ({rideEstimate.distance})</Text>
-            <Text style={styles.fareValue}>₹{rideEstimate.distanceFare}</Text>
+                          <Text style={styles.fareValue}>{formatRidePrice(roundedEstimate.distanceFare)}</Text>
           </View>
           
           <View style={styles.fareItem}>
             <Text style={styles.fareLabel}>Time ({rideEstimate.duration})</Text>
-            <Text style={styles.fareValue}>₹{rideEstimate.timeFare}</Text>
+                          <Text style={styles.fareValue}>{formatRidePrice(roundedEstimate.timeFare)}</Text>
           </View>
           
           <View style={styles.fareDivider} />
           
           <View style={styles.fareTotal}>
             <Text style={styles.fareTotalLabel}>Total Fare</Text>
-            <Text style={styles.fareTotalValue}>₹{rideEstimate.fare}</Text>
+            <Text style={styles.fareTotalValue}>{formatRidePrice(roundedEstimate.roundedTotal)}</Text>
           </View>
         </View>
 
@@ -182,7 +186,7 @@ export default function RideEstimateScreen({ navigation, route }: any) {
       <View style={styles.bottomAction}>
         <View style={styles.fareDisplay}>
           <Text style={styles.fareDisplayLabel}>Total Fare</Text>
-          <Text style={styles.fareDisplayValue}>₹{rideEstimate.fare}</Text>
+                      <Text style={styles.fareDisplayValue}>{formatRidePrice(roundedEstimate.roundedTotal)}</Text>
         </View>
         <Button
           title="Confirm Ride"

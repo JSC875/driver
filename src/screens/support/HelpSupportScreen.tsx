@@ -17,6 +17,7 @@ const mockTrip = {
 const menuItems = [
   { key: 'ride', label: 'Ride Issues', screen: 'RideIssues', icon: 'car-outline' },
   { key: 'payments', label: 'Payments and Refunds', screen: 'PaymentsIssues', icon: 'card-outline' },
+
   { key: 'account', label: 'Account related issues', screen: 'AccountIssues', icon: 'person-outline' },
   { key: 'other', label: 'Other Issues', screen: 'OtherIssues', icon: 'help-circle-outline' },
 ];
@@ -58,7 +59,7 @@ export default function HelpSupportScreen({ navigation }: any) {
       </Animated.View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Recent Trip Card */}
-        <Animated.View style={[styles.tripCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        {/* <Animated.View style={[styles.tripCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.tripCardLeft}>
             <Image source={{ uri: mockTrip.map }} style={styles.mapImage} />
           </View>
@@ -70,7 +71,7 @@ export default function HelpSupportScreen({ navigation }: any) {
               <Text style={styles.getHelpLink}>Get Help</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </Animated.View> */}
         {/* Menu Items */}
         <Animated.View style={[styles.menuSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
           {menuItems.map((item) => (

@@ -16,6 +16,7 @@ import { mockRideHistory } from '../../data/mockData';
 import { useRideHistory } from '../../store/RideHistoryContext';
 import { RefreshControl } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { formatRidePrice } from '../../utils/priceUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -71,7 +72,14 @@ export default function RideHistoryScreen({ navigation }: any) {
 
   // Filter and sort rides (latest first)
   const filteredRides = rides
-    .filter((ride) => ride.status === selectedTab || (selectedTab === 'completed' && ride.status === 'accepted'))
+    .filter((ride) => {
+      if (selectedTab === 'completed') {
+        return ride.status === 'completed' || ride.status === 'accepted';
+      } else if (selectedTab === 'cancelled') {
+        return ride.status === 'cancelled';
+      }
+      return false;
+    })
     .sort((a, b) => {
       // Sort by requestedAt date (latest first)
       const dateA = new Date(a.requestedAt || a.date).getTime();
@@ -93,7 +101,7 @@ export default function RideHistoryScreen({ navigation }: any) {
             <Text style={styles.timeText}>{item.time}</Text>
           </View>
           <View style={styles.fareContainer}>
-            <Text style={styles.fareText}>₹{item.fare}</Text>
+            <Text style={styles.fareText}>{formatRidePrice(item.fare)}</Text>
           </View>
         </View>
 

@@ -24,6 +24,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '../../store/useLocationStore';
 import { connectSocketWithJWT } from '../../utils/socket';
 import { logJWTDetails } from '../../utils/jwtDecoder';
+import { formatRidePrice, getRidePrice } from '../../utils/priceUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -74,7 +75,7 @@ function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; on
       opacity: anim,
       zIndex: 10000,
     }}>
-      <Animated.View style={{
+      {/* <Animated.View style={{
         width: width - 40,
         backgroundColor: '#fff',
         borderRadius: 20,
@@ -164,7 +165,7 @@ function CancelRideModal({ visible, onClose, onConfirm }: { visible: boolean; on
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Cancel Ride</Text>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </Animated.View> */}
     </Animated.View>
   );
 }
@@ -193,7 +194,7 @@ function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void 
               <View style={{ backgroundColor: '#3EC6FF', borderRadius: 50, width: 90, height: 90, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                 <FontAwesome5 name="ambulance" size={48} color="#fff" />
               </View>
-              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>AMBULANCE</Text>
+              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>108</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ alignItems: 'center' }}
@@ -202,7 +203,7 @@ function SOSModal({ visible, onClose }: { visible: boolean; onClose: () => void 
               <View style={{ backgroundColor: '#FF3B30', borderRadius: 50, width: 90, height: 90, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                 <FontAwesome5 name="user-shield" size={48} color="#fff" />
               </View>
-              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>POLICE</Text>
+              <Text style={{ fontWeight: 'bold', fontSize: 16, color: '#222' }}>100</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -315,16 +316,38 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
           alignItems: 'stretch',
           justifyContent: 'flex-start',
         }}>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222', marginBottom: 18, textAlign: 'center' }}>Menu</Text>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Home'); onClose(); }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+            <TouchableOpacity 
+              onPress={onClose} 
+              style={{ 
+                backgroundColor: '#1877f2', 
+                borderRadius: 25, 
+                width: 50,
+                height: 50,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 4
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#222' }}>Menu</Text>
+          </View>
+          <TouchableOpacity key="home" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Home'); onClose(); }}>
             <Ionicons name="home" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Home</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Refer'); onClose(); }}>
+          <TouchableOpacity key="refer" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Refer'); onClose(); }}>
             <Ionicons name="gift" size={26} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Refer</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { 
+          <TouchableOpacity key="rideHistory" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { 
             console.log('🚀 Ride History button clicked - navigating to RideHistory screen');
             onNavigate('RideHistory'); 
             onClose(); 
@@ -332,20 +355,21 @@ const MenuModal = ({ visible, onClose, onNavigate, halfScreen, onLogout }: { vis
             <Ionicons name="time" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Ride History</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Wallet'); onClose(); }}>
+          <TouchableOpacity key="wallet" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Wallet'); onClose(); }}>
             <Ionicons name="wallet" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Wallet</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Settings'); onClose(); }}>
+
+          <TouchableOpacity key="settings" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('Settings'); onClose(); }}>
             <Ionicons name="settings" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('HelpSupport'); onClose(); }}>
+          <TouchableOpacity key="helpSupport" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { onNavigate('HelpSupport'); onClose(); }}>
             <Ionicons name="help-circle" size={24} color="#1877f2" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>Support</Text>
           </TouchableOpacity>
-          <View style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onLogout}>
+          <View key="divider" style={{ borderTopWidth: 1, borderTopColor: '#eee', marginVertical: 16 }} />
+          <TouchableOpacity key="logout" style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={onLogout}>
             <Ionicons name="log-out" size={24} color="#FF3B30" style={{ marginRight: 16 }} />
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FF3B30' }}>Logout</Text>
           </TouchableOpacity>
@@ -630,13 +654,7 @@ export default function HomeScreen() {
             setIsOnline(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
-            // Call status endpoint to update driver status to AVAILABLE
-            try {
-              console.log('🔄 Swipe to online - calling status endpoint...');
-              await handleStatusUpdate();
-            } catch (error) {
-              console.error('❌ Error updating status on swipe to online:', error);
-            }
+            // Note: Driver status will be updated via updateDriverStatusOnBackend below
             
             // Fetch JWT token when going online
             if (user?.unsafeMetadata?.type === 'driver') {
@@ -808,7 +826,7 @@ export default function HomeScreen() {
   function mapBackendRideRequestToUI(backendRide: BackendRideRequest) {
     return {
       id: backendRide.rideId,
-      price: `₹${backendRide.price}`,
+              price: formatRidePrice(backendRide.price),
       type: backendRide.rideType || 'Mini',
       tag: 'Hyderabad',
       rating: '4.95',
@@ -862,7 +880,7 @@ export default function HomeScreen() {
         from: currentRideToCancel.pickupAddress || '',
         to: currentRideToCancel.dropoffAddress || '',
         driver: user?.fullName || 'You',
-        fare: Number(String(currentRideToCancel.price).replace(/[^\d.]/g, '')) || 0,
+        fare: getRidePrice(currentRideToCancel.price),
         distance: 0,
         duration: 0,
         status: 'cancelled',
@@ -937,7 +955,7 @@ export default function HomeScreen() {
         // Convert socket ride request to local format
         const localRideRequest: RideRequest = {
           id: currentRideRequest.rideId,
-          price: `₹${currentRideRequest.price}`,
+          price: formatRidePrice(currentRideRequest.price),
           type: currentRideRequest.rideType || 'Mini',
           tag: 'Hyderabad',
           rating: '4.95',
@@ -981,7 +999,7 @@ export default function HomeScreen() {
       // Convert acceptedRideDetails to local RideRequest format
       const localRideRequest: RideRequest = {
         id: acceptedRideDetails.rideId,
-        price: `₹${acceptedRideDetails.price}`,
+        price: formatRidePrice(acceptedRideDetails.price),
         type: acceptedRideDetails.rideType || 'Mini',
         tag: 'Hyderabad',
         rating: '4.95',
@@ -1427,7 +1445,7 @@ export default function HomeScreen() {
         <View style={styles.speedPill}>
           <Text style={styles.speedZero}>0</Text>
           <Text style={styles.speedZero}> | </Text>
-          <Text style={styles.speedLimit}>80</Text>
+          <Text style={styles.speedLimit}>40</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {/* Driver Status Indicator */}

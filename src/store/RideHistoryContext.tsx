@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { rideHistoryService, RideHistoryItem as ApiRideHistoryItem } from '../services/rideHistoryService';
+import { getRidePrice } from '../utils/priceUtils';
 
 export type RideStatus = 'accepted' | 'completed' | 'cancelled';
 
@@ -72,7 +73,12 @@ export const RideHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const addRide = (ride: RideHistoryItem) => {
-    setRides((prev) => [ride, ...prev]);
+    // Round the fare for easier payment between driver and user
+    const roundedRide = {
+      ...ride,
+      fare: getRidePrice(ride.fare)
+    };
+    setRides((prev) => [roundedRide, ...prev]);
   };
 
   const clearHistory = () => {

@@ -18,8 +18,7 @@ const { width } = Dimensions.get('window');
 
 export default function SettingsScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
-  const [locationServices, setLocationServices] = useState(true);
-  const [autoPayment, setAutoPayment] = useState(false);
+  // const [locationServices, setLocationServices] = useState(true);
   const [shareData, setShareData] = useState(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -69,21 +68,19 @@ export default function SettingsScreen({ navigation }: any) {
           value: notifications,
           onToggle: setNotifications,
         },
-        {
-          icon: 'location-outline',
-          title: 'Location Services',
-          subtitle: 'Allow location access for better experience',
-          toggle: true,
-          value: locationServices,
-          onToggle: setLocationServices,
-        },
+        // {
+        //   icon: 'location-outline',
+        //   title: 'Location Services',
+        //   subtitle: 'Allow location access for better experience',
+        //   toggle: true,
+        //   value: locationServices,
+        //   onToggle: setLocationServices,
+        // },
         {
           icon: 'card-outline',
           title: 'Auto Payment',
           subtitle: 'Automatically pay for rides',
-          toggle: true,
-          value: autoPayment,
-          onToggle: setAutoPayment,
+          action: () => navigation.navigate('AutoPayment'),
         },
       ],
     },
@@ -113,14 +110,14 @@ export default function SettingsScreen({ navigation }: any) {
           subtitle: 'Read our terms and conditions',
           action: () => navigation.navigate('TermsCondition'),
         },
-        {
-          icon: 'share-outline',
-          title: 'Data Sharing',
-          subtitle: 'Control how your data is shared',
-          toggle: true,
-          value: shareData,
-          onToggle: setShareData,
-        },
+        // {
+        //   icon: 'share-outline',
+        //   title: 'Data Sharing',
+        //   subtitle: 'Control how your data is shared',
+        //   toggle: true,
+        //   value: shareData,
+        //   onToggle: setShareData,
+        // },
       ],
     },
   ];
@@ -187,8 +184,7 @@ export default function SettingsScreen({ navigation }: any) {
 
         {/* App Info */}
         <Animated.View style={[styles.appInfo, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.appVersion}>RideSwift v1.0.0</Text>
-          <Text style={styles.appBuild}>Build 2024.01.15</Text>
+          
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
