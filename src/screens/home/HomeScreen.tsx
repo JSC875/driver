@@ -22,7 +22,7 @@ import { RideRequest as BackendRideRequest } from '../../store/OnlineStatusConte
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocationStore } from '../../store/useLocationStore';
-import { connectSocketWithJWT } from '../../utils/socket';
+
 import { logJWTDetails } from '../../utils/jwtDecoder';
 import { formatRidePrice, getRidePrice } from '../../utils/priceUtils';
 
@@ -422,6 +422,8 @@ async function updateDriverStatusOnBackend({
   }
 }
 
+
+
 export default function HomeScreen() {
   const { user, isLoaded } = useUser();
   const { getToken, signOut } = useAuth();
@@ -442,8 +444,7 @@ export default function HomeScreen() {
     resetDriverStatus,
     connectionStatus,
     driverId,
-    userType,
-    driverLocation
+    userType
   } = useOnlineStatus();
   const [isSOSVisible, setSOSVisible] = useState(false);
   const [showOfflineScreen, setShowOfflineScreen] = useState(false);
@@ -472,6 +473,87 @@ export default function HomeScreen() {
   // Swipe gesture state - REMOVED (no more map swiping)
 
   // Function to handle status update on swipe - REMOVED (no more map swiping)
+
+  // Function to update driver online status on backend
+  const updateDriverOnlineStatusOnBackend = async (token: string) => {
+    try {
+      console.log('📡 Calling /api/drivers/me/status endpoint for ONLINE...');
+      
+      const response = await fetch('https://bike-taxi-production.up.railway.app/api/drivers/me/status', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-App-Version': '1.0.0',
+          'X-Platform': 'ReactNative',
+          'X-Environment': 'development',
+        },
+        body: JSON.stringify({
+          status: 'ONLINE'
+        }),
+      });
+
+      const responseText = await response.text();
+      let data = null;
+      
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          console.error('❌ Failed to parse response as JSON:', jsonErr);
+        }
+      }
+
+      if (response.ok) {
+        console.log('✅ Online status update successful!');
+        console.log('📊 Response data:', data);
+        return true;
+      } else if (response.status === 403) {
+        console.error('❌ 403 Forbidden - JWT userType issue detected for online status');
+        console.error('📊 Response status:', response.status);
+        console.error('📊 Response data:', data);
+        
+        // Try to regenerate JWT and retry once
+        console.log('🔄 Attempting JWT regeneration and retry for online status...');
+        try {
+          const retryToken = await getToken({ template: 'driver_app_token', skipCache: true });
+          
+          const retryResponse = await fetch('https://bike-taxi-production.up.railway.app/api/drivers/me/status', {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${retryToken}`,
+              'Content-Type': 'application/json',
+              'X-App-Version': '1.0.0',
+              'X-Platform': 'ReactNative',
+              'X-Environment': 'development',
+            },
+            body: JSON.stringify({
+              status: 'ONLINE'
+            }),
+          });
+          
+          if (retryResponse.ok) {
+            console.log('✅ Online status update successful after retry!');
+            return true;
+          } else {
+            console.error('❌ Online status update failed even after retry');
+            return false;
+          }
+        } catch (retryError) {
+          console.error('❌ Online status retry failed:', retryError);
+          return false;
+        }
+      } else {
+        console.error('❌ Online status update failed');
+        console.error('📊 Response status:', response.status);
+        console.error('📊 Response data:', data);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error during online status update:', error);
+      return false;
+    }
+  };
 
   const handleOfflineStatusUpdate = async () => {
     try {
@@ -654,29 +736,37 @@ export default function HomeScreen() {
             setIsOnline(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
-            // Note: Driver status will be updated via updateDriverStatusOnBackend below
-            
-            // Fetch JWT token when going online
+            // Update driver status to ONLINE on backend
             if (user?.unsafeMetadata?.type === 'driver') {
               try {
                 const onlineToken = await getToken({ template: 'driver_app_token' });
                 console.log('Custom Clerk JWT (online):', onlineToken);
-                let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-                const clerkDriverId = user?.id || (await AsyncStorage.getItem('clerkDriverId'));
-                if (location && onlineToken && clerkDriverId) {
-                  await updateDriverStatusOnBackend({
-                    clerkDriverId,
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    isOnline: true,
-                    token: onlineToken,
-                  });
+                
+                if (onlineToken) {
+                  // Call the status endpoint to set driver as ONLINE
+                  const statusSuccess = await updateDriverOnlineStatusOnBackend(onlineToken);
+                  
+                  if (statusSuccess) {
+                    console.log('✅ Driver status updated to ONLINE successfully');
+                  } else {
+                    console.error('❌ Failed to update driver status to ONLINE');
+                  }
+                  
+                  // Also update location for completeness
+                  let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                  const clerkDriverId = user?.id || (await AsyncStorage.getItem('clerkDriverId'));
+                  if (location && clerkDriverId) {
+                    await updateDriverStatusOnBackend({
+                      clerkDriverId,
+                      latitude: location.coords.latitude,
+                      longitude: location.coords.longitude,
+                      isOnline: true,
+                      token: onlineToken,
+                    });
+                  }
                 }
-                // Note: Removed old API call to roqet-production endpoint
-                // Note: Removed old API call to roqet-production endpoint
-                // Now using proper bike-taxi-production endpoints with JWT authentication
               } catch (err) {
-                console.error('Failed to fetch custom JWT on go online:', err);
+                console.error('Failed to update driver status on go online:', err);
               }
             }
           });
