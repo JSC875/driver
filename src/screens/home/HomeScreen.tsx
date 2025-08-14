@@ -1295,6 +1295,15 @@ export default function HomeScreen() {
         } else if (response.status === 400 && data?.error?.includes('already exists')) {
           console.log('[createDriver] ⚠️ Driver already exists, this is normal');
           console.log('[createDriver] Driver already registered with clerkUserId:', user.id);
+          
+          // Store the clerkDriverId even when driver already exists
+          try {
+            await AsyncStorage.setItem('clerkDriverId', user.id);
+            console.log('[createDriver] clerkDriverId stored for existing driver:', user.id);
+          } catch (e) {
+            console.error('[createDriver] Failed to save clerkDriverId to AsyncStorage:', e);
+          }
+          
           setDriverCreated(true);
         } else {
           console.error('[createDriver] ❌ Failed to create driver');

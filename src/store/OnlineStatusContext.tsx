@@ -373,10 +373,14 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     // Call backend endpoint to accept ride
     try {
-      const clerkDriverId = await AsyncStorage.getItem('clerkDriverId');
+      let clerkDriverId = await AsyncStorage.getItem('clerkDriverId');
       if (!clerkDriverId) {
         console.error('[acceptRide] No clerkDriverId found in AsyncStorage');
-      } else {
+        console.log('[acceptRide] Using driverId from JWT as fallback:', driverId);
+        clerkDriverId = driverId; // Use driverId from JWT as fallback
+      }
+      
+      if (clerkDriverId) {
         const url = `https://bike-taxi-production.up.railway.app/api/rides/${backendRideId}/accept`;
         console.log('[acceptRide] Hitting backend endpoint:', url);
         console.log('[acceptRide] Using ride ID:', backendRideId);
@@ -445,6 +449,8 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
             console.error('❌ Response data:', data);
           }
         }
+      } else {
+        console.error('[acceptRide] No clerkDriverId available for API call');
       }
     } catch (err) {
       console.error('[acceptRide] Error calling backend accept endpoint:', err);
