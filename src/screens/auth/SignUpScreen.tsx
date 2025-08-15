@@ -425,7 +425,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
   const [signUpCreated, setSignUpCreated] = useState<boolean>(false);
   const { signUp, setActive: setSignUpActive, isLoaded } = useSignUp();
   const { user } = useUser();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
 
   // Timer for OTP resend
   useEffect(() => {
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   stepTitle: {
-    fontSize: Layout.fontSize.xxl,
+    fontSize: Layout.fontSize.xl,
     fontWeight: 'bold',
     color: Colors.text,
     marginBottom: 32,

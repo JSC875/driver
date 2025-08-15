@@ -14,6 +14,7 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import Button from '../../components/common/Button';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
+import { useAuth } from '@clerk/clerk-expo';
 import HomeScreen from '../home/HomeScreen';
 
 function goToHome(navigation: any) {
@@ -33,12 +34,59 @@ const feedbackTags = [
 export default function RideSummaryScreen({ navigation, route }: any) {
   const { destination, estimate, driver } = route.params;
   const { setIsOnline, resetDriverStatus } = useOnlineStatus();
+  const { getToken } = useAuth();
   // Add these hooks to clear ride state
   const [_, setRideInProgress] = React.useState(null);
   const [__, setNavigationRide] = React.useState(null);
   const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tip, setTip] = useState(0);
+
+  // Function to update driver online status on backend
+  const updateDriverOnlineStatusOnBackend = async (token: string) => {
+    try {
+      console.log('📡 Calling /api/drivers/me/status endpoint for ONLINE (RideSummary)...');
+      
+      const response = await fetch('https://bike-taxi-production.up.railway.app/api/drivers/me/status', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'X-App-Version': '1.0.0',
+          'X-Platform': 'ReactNative',
+          'X-Environment': 'development',
+        },
+        body: JSON.stringify({
+          status: 'ONLINE'
+        }),
+      });
+
+      const responseText = await response.text();
+      let data = null;
+      
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonErr) {
+          console.error('❌ Failed to parse response as JSON:', jsonErr);
+        }
+      }
+
+      if (response.ok) {
+        console.log('✅ Online status update successful (RideSummary)!');
+        console.log('📊 Response data:', data);
+        return true;
+      } else {
+        console.error('❌ Online status update failed (RideSummary)');
+        console.error('📊 Response status:', response.status);
+        console.error('📊 Response data:', data);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error during online status update (RideSummary):', error);
+      return false;
+    }
+  };
 
   const handleRating = (value: number) => {
     setRating(value);
@@ -56,10 +104,26 @@ export default function RideSummaryScreen({ navigation, route }: any) {
     setTip(amount);
   };
 
-  const handleSubmitFeedback = () => {
+  const handleSubmitFeedback = async () => {
     // Reset driver status to available
     resetDriverStatus();
     setIsOnline(true);
+    
+    // Update driver status to ONLINE on backend
+    try {
+      const onlineToken = await getToken({ template: 'driver_app_token' });
+      if (onlineToken) {
+        const statusSuccess = await updateDriverOnlineStatusOnBackend(onlineToken);
+        if (statusSuccess) {
+          console.log('✅ Driver status updated to ONLINE after ride completion');
+        } else {
+          console.error('❌ Failed to update driver status to ONLINE after ride completion');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update driver status after ride completion:', err);
+    }
+    
     setRideInProgress(null);
     setNavigationRide(null);
     goToHome(navigation);

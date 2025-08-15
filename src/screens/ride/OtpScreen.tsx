@@ -24,6 +24,8 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
   const anim = React.useRef(new Animated.Value(0)).current;
   const checkAnim = React.useRef(new Animated.Value(0)).current;
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isWaitingForRideStarted, setIsWaitingForRideStarted] = useState(false);
 
   React.useEffect(() => {
     Animated.spring(anim, {
@@ -34,12 +36,30 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
     }).start();
   }, []);
 
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   // Listen for driver cancellation success and ride started events
   React.useEffect(() => {
     const socket = socketManager.getSocket();
     if (socket) {
+      console.log('🔗 Socket connection status in OtpScreen:', socket.connected);
+      console.log('🔗 Socket ID:', socket.id);
+      
       const handleDriverCancellationSuccess = (data: any) => {
         console.log('✅ Driver cancellation success received in OtpScreen:', data);
+        // Clear any pending timeout
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setIsWaitingForRideStarted(false);
         // Navigate to home screen after successful cancellation
         navigation.navigate('Home');
       };
@@ -48,20 +68,53 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         console.log('🚀 Ride started event received in OtpScreen:', data);
         if (data.rideId === ride.rideId) {
           console.log('✅ Ride started, navigating to RideInProgressScreen');
+          // Clear any pending timeout
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setIsWaitingForRideStarted(false);
           // Navigate to ride in progress screen
           navigation.navigate('RideInProgressScreen', { ride });
         }
       };
 
+      // Listen for socket connection status changes
+      const handleConnect = () => {
+        console.log('🔗 Socket connected in OtpScreen');
+      };
+
+      const handleDisconnect = (reason: string | null) => {
+        console.log('🔌 Socket disconnected in OtpScreen:', reason);
+        // If socket disconnects while waiting for ride_started, trigger fallback
+        if (isWaitingForRideStarted) {
+          console.log('⚠️ Socket disconnected while waiting for ride_started, triggering fallback');
+          handleFallbackNavigation();
+        }
+      };
+
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
       socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
       socket.on('ride_started', handleRideStarted);
 
       return () => {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
         socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
         socket.off('ride_started', handleRideStarted);
       };
+    } else {
+      console.warn('⚠️ No socket available in OtpScreen');
     }
-  }, [navigation, ride.rideId]);
+  }, [navigation, ride.rideId, isWaitingForRideStarted]);
+
+  // Function to handle fallback navigation after timeout
+  const handleFallbackNavigation = () => {
+    console.log('⏰ Timeout reached, navigating to RideInProgressScreen as fallback');
+    setIsWaitingForRideStarted(false);
+    navigation.navigate('RideInProgressScreen', { ride });
+  };
 
   const handleChange = (val: string, idx: number) => {
     if (!/^[0-9]?$/.test(val)) return;
@@ -103,12 +156,38 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
       // Get authentication token
       const token = await getToken({ template: 'driver_app_token', skipCache: true });
       
+      if (!token) {
+        console.error('❌ No authentication token available');
+        Alert.alert('Authentication Error', 'Unable to verify OTP. Please try again.');
+        setSubmitted(false);
+        setIsVerifying(false);
+        return;
+      }
+      
       // Step 1: Call API endpoint to verify OTP
       console.log('🔐 Calling API to verify OTP...');
       const apiResponse = await rideService.verifyOtp(ride.rideId, enteredOtp, token);
       
       if (apiResponse.success) {
         console.log('✅ OTP verified successfully via API');
+        
+        // Check socket connection before sending OTP
+        const socket = socketManager.getSocket();
+        if (!socket || !socket.connected) {
+          console.warn('⚠️ Socket not connected, proceeding with fallback navigation');
+          // If socket is not connected, proceed directly to ride screen
+          Animated.sequence([
+            Animated.timing(checkAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.delay(600),
+          ]).start(() => {
+            console.log('✅ OTP verified, navigating directly to RideInProgressScreen (no socket)');
+            navigation.navigate('RideInProgressScreen', { ride });
+          });
+          setSubmitted(false);
+          checkAnim.setValue(0);
+          setIsVerifying(false);
+          return;
+        }
         
         // Step 2: Also emit socket.io event for real-time communication
         console.log('🔐 Emitting socket.io OTP verification event...');
@@ -127,7 +206,14 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         ]).start(() => {
           console.log('✅ OTP verification successful, waiting for ride_started event...');
           
-          // Don't navigate here - wait for ride_started socket event
+          setIsWaitingForRideStarted(true);
+          
+          // Set a timeout to prevent getting stuck (10 seconds)
+          timeoutRef.current = setTimeout(() => {
+            console.log('⏰ Timeout reached for ride_started event');
+            handleFallbackNavigation();
+          }, 10000); // 10 seconds timeout
+          
           setSubmitted(false);
           checkAnim.setValue(0);
           setIsVerifying(false);
@@ -171,6 +257,13 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
               reason: 'Driver cancelled during OTP entry'
             });
             
+            // Clear any pending timeout
+            if (timeoutRef.current) {
+              clearTimeout(timeoutRef.current);
+              timeoutRef.current = null;
+            }
+            setIsWaitingForRideStarted(false);
+            
             // Send cancellation to server
             socketManager.cancelRide({
               rideId: ride.rideId,
@@ -183,6 +276,17 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         }
       ]
     );
+  };
+
+  // Function to manually proceed to ride (fallback button)
+  const handleManualProceed = () => {
+    console.log('🔄 Manual proceed to ride triggered');
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsWaitingForRideStarted(false);
+    navigation.navigate('RideInProgressScreen', { ride });
   };
 
   return (
@@ -205,6 +309,20 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         </TouchableOpacity>
         <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: '#1877f2', letterSpacing: 1 }}>Enter OTP</Text>
         <Text style={{ fontSize: 17, marginBottom: 28, color: '#444', textAlign: 'center' }}>Enter the 4-digit code to start your ride</Text>
+        
+        {/* Status message when waiting for ride_started event */}
+        {isWaitingForRideStarted && (
+          <View style={{ marginBottom: 20, alignItems: 'center' }}>
+            <Text style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 8 }}>
+              OTP verified successfully! Starting your ride...
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#1877f2', marginRight: 8 }} />
+              <Text style={{ fontSize: 12, color: '#888' }}>Connecting to ride...</Text>
+            </View>
+          </View>
+        )}
+        
         <View style={{ flexDirection: 'row', marginBottom: 32, gap: 8 }}>
           {otp.map((digit, idx) => (
             <TextInput
@@ -248,6 +366,18 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
             {isVerifying ? 'Verifying...' : 'Submit OTP'}
           </Text>
         </TouchableOpacity>
+        
+        {/* Show manual proceed button if waiting for ride_started event */}
+        {isWaitingForRideStarted && (
+          <TouchableOpacity
+            style={{ backgroundColor: '#22C55E', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginTop: 8 }}
+            onPress={handleManualProceed}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Proceed to Ride</Text>
+          </TouchableOpacity>
+        )}
+        
         {/* <TouchableOpacity
           style={{ backgroundColor: '#ff4444', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
           onPress={handleCancelRide}
