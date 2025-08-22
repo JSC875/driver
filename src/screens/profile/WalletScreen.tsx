@@ -9,6 +9,7 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,8 @@ import { useAuth } from '@clerk/clerk-expo';
 import { socketManager } from '../../utils/socket';
 import { walletService, WalletTransaction } from '../../services/walletService';
 import { getUserIdFromJWT } from '../../utils/jwtDecoder';
+import { initializePayment, PaymentOptions, convertRupeesToPaise, getRazorpayKey, PAYMENT_CONFIG } from '../../utils/razorpay';
+import RazorpayWebView from '../../components/payment/RazorpayWebView';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +79,14 @@ export default function WalletScreen({ navigation }: any) {
   const [lastPaymentAmount, setLastPaymentAmount] = useState(0);
   const [driverId, setDriverId] = useState<string>('');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [isRecharging, setIsRecharging] = useState(false);
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showRazorpayWebView, setShowRazorpayWebView] = useState(false);
+  const [webViewOrderData, setWebViewOrderData] = useState<any>(null);
+  const [pendingAmount, setPendingAmount] = useState<number>(0);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -107,21 +118,6 @@ export default function WalletScreen({ navigation }: any) {
       // Get driver ID from JWT
       const userId = await getUserIdFromJWT(getToken);
       setDriverId(userId);
-      
-      // Quick test call to verify API connectivity
-      console.log('🧪 WalletScreen: Making quick API test call...');
-      try {
-        const token = await getToken();
-        if (token) {
-          console.log('🧪 WalletScreen: Got token, testing API call...');
-          const testResponse = await walletService.getWalletBalance(userId, token);
-          console.log('🧪 WalletScreen: Test API call result:', testResponse);
-        } else {
-          console.log('❌ WalletScreen: No token available for test call');
-        }
-      } catch (testError) {
-        console.error('🧪 WalletScreen: Test API call failed:', testError);
-      }
       
       // Fetch wallet balance and transactions
       await fetchWalletData(userId);
@@ -365,6 +361,224 @@ export default function WalletScreen({ navigation }: any) {
       Alert.alert('Withdrawal Failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.');
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  const processRecharge = async (amount: number) => {
+    if (!driverId) {
+      Alert.alert('Error', 'Driver ID not available. Please try again.');
+      return;
+    }
+
+    if (amount < 100) {
+      Alert.alert('Minimum Amount', 'Minimum recharge amount is ₹100.');
+      return;
+    }
+
+    setIsRecharging(true);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      // Step 1: Create recharge order via API
+      console.log('💰 Creating recharge order for amount:', amount);
+      const orderResponse = await walletService.createRechargeOrder(driverId, amount, token);
+      
+      if (!orderResponse.success || !orderResponse.data) {
+        throw new Error(orderResponse.error || 'Failed to create recharge order');
+      }
+
+      console.log('✅ Recharge order created:', orderResponse.data);
+
+      // Step 2: Initialize Razorpay payment
+      const amountInPaise = convertRupeesToPaise(amount);
+      const orderData = orderResponse.data || {};
+      const paymentOptions: PaymentOptions = {
+        key: orderData.keyId || getRazorpayKey(),
+        amount: amountInPaise,
+        currency: 'INR',
+        name: PAYMENT_CONFIG.name,
+        description: `Wallet recharge - ₹${amount}`,
+        order_id: orderData.orderId || '',
+        prefill: {
+          name: 'Driver',
+          email: 'driver@roqet.com',
+          contact: '7731993656'
+        },
+        theme: PAYMENT_CONFIG.theme,
+        handler: async (response: any) => {
+          console.log('✅ Payment successful:', response);
+          await handleRechargeSuccess(response, orderData.orderId || '');
+        },
+        modal: {
+          ondismiss: () => {
+            console.log('Payment modal dismissed');
+            setIsRecharging(false);
+          },
+        },
+      };
+
+      console.log('🔧 Razorpay options:', paymentOptions);
+
+      const result = await initializePayment(paymentOptions);
+      
+      if (result.success) {
+        console.log('✅ Payment completed successfully');
+        console.log('💳 Payment result:', result);
+        
+        // Check if this is a development fallback
+        const isDevFallback = result.message?.includes('development fallback');
+        
+        if (isDevFallback) {
+          // For development fallback, skip backend callback and update wallet directly
+          await handleDevelopmentRechargeSuccess(result, amount, orderData.orderId || '');
+        } else {
+          // For real payments, process through backend callback
+          await handleRechargeSuccess(result, orderData.orderId || '');
+        }
+      } else if (result.error === 'USE_WEBVIEW') {
+        console.log('🌐 Using WebView implementation for Razorpay');
+        // Use WebView implementation
+        setPendingAmount(amount);
+        setWebViewOrderData({
+          keyId: orderData.keyId || getRazorpayKey(),
+          orderId: orderData.orderId || '',
+          amount: convertRupeesToPaise(amount),
+          currency: 'INR',
+          name: PAYMENT_CONFIG.name,
+          description: `Wallet recharge - ₹${amount}`,
+          prefill: {
+            name: 'Driver',
+            email: 'driver@roqet.com',
+            contact: '7731993656'
+          },
+          theme: PAYMENT_CONFIG.theme,
+        });
+        setShowRazorpayWebView(true);
+        setIsRecharging(false); // Reset loading state
+      } else {
+        throw new Error(result.error || 'Payment failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Recharge error:', error);
+      Alert.alert('Recharge Failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      setIsRecharging(false);
+    }
+  };
+
+  const handleWebViewSuccess = async (paymentData: any) => {
+    try {
+      console.log('🌐 WebView payment success:', paymentData);
+      setShowRazorpayWebView(false);
+      
+      // Process through backend callback
+      await handleRechargeSuccess(paymentData, webViewOrderData?.orderId || '');
+    } catch (error) {
+      console.error('❌ WebView payment success error:', error);
+      Alert.alert('Payment Processing Failed', 'Payment completed but failed to update wallet. Please contact support.');
+    }
+  };
+
+  const handleWebViewFailure = (error: any) => {
+    console.error('🌐 WebView payment failed:', error);
+    setShowRazorpayWebView(false);
+    Alert.alert('Payment Failed', error?.error?.description || 'Payment was not completed. Please try again.');
+  };
+
+  const handleWebViewClose = () => {
+    setShowRazorpayWebView(false);
+    setWebViewOrderData(null);
+    setPendingAmount(0);
+  };
+
+  const handleDevelopmentRechargeSuccess = async (paymentData: any, amount: number, orderId: string) => {
+    try {
+      console.log('🎯 Processing development recharge success...');
+      
+      // For development fallback, update wallet balance directly
+      const newBalance = walletBalance + amount;
+      setWalletBalance(newBalance);
+      
+      // Add recharge transaction to local state
+      const newTransaction: WalletTransaction = {
+        id: `recharge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: 'credit',
+        amount: amount,
+        description: 'Wallet recharge via Razorpay (Development Mode)',
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        category: 'topup'
+      };
+      
+      setTransactions(prev => [newTransaction, ...prev]);
+      
+      Alert.alert(
+        'Recharge Successful',
+        `₹${amount} has been added to your wallet successfully.\n\n(Development mode - simulated payment)`
+      );
+      
+    } catch (error) {
+      console.error('❌ Development recharge error:', error);
+      Alert.alert('Recharge Failed', error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsRecharging(false);
+    }
+  };
+
+  const handleRechargeSuccess = async (paymentData: any, orderId: string) => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      // Step 3: Process recharge callback
+      console.log('💰 Processing recharge callback...');
+      const callbackResponse = await walletService.processRechargeCallback(
+        driverId,
+        paymentData.paymentId || paymentData.razorpay_payment_id,
+        orderId,
+        paymentData.signature || paymentData.razorpay_signature,
+        token
+      );
+
+      if (callbackResponse.success && callbackResponse.data) {
+        const callbackData = callbackResponse.data;
+        // Update wallet balance with API response
+        setWalletBalance(callbackData.balance || 0);
+        setRideEarnings(callbackData.rideEarnings || 0);
+        setTotalEarnings(callbackData.totalEarnings || 0);
+        
+        // Add recharge transaction to local state
+        const newTransaction: WalletTransaction = {
+          id: `recharge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'credit',
+          amount: callbackData.amount || 0,
+          description: 'Wallet recharge via Razorpay',
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          category: 'topup'
+        };
+        
+        setTransactions(prev => [newTransaction, ...prev]);
+        
+        Alert.alert(
+          'Recharge Successful',
+          `₹${callbackData.amount || 0} has been added to your wallet successfully via Razorpay.`
+        );
+      } else {
+        throw new Error(callbackResponse.error || 'Failed to process recharge');
+      }
+      
+    } catch (error) {
+      console.error('❌ Recharge callback error:', error);
+      Alert.alert('Recharge Failed', error instanceof Error ? error.message : 'Payment completed but wallet update failed. Please contact support.');
+    } finally {
+      setIsRecharging(false);
     }
   };
 
@@ -613,12 +827,55 @@ export default function WalletScreen({ navigation }: any) {
               </View>
             </Animated.View>
 
+            {/* Custom Recharge Input */}
+            <Animated.View style={[styles.rechargeCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+              <Text style={styles.rechargeTitle}>Custom Recharge</Text>
+              <View style={styles.rechargeInputContainer}>
+                <Text style={styles.currencySymbol}>₹</Text>
+                <TextInput
+                  style={styles.rechargeInput}
+                  placeholder="Enter amount"
+                  placeholderTextColor={Colors.gray400}
+                  value={rechargeAmount}
+                  onChangeText={setRechargeAmount}
+                  keyboardType="numeric"
+                  maxLength={6}
+                />
+                <TouchableOpacity 
+                  style={[styles.rechargeButton, isRecharging && styles.rechargeButtonDisabled]}
+                  onPress={() => {
+                    const amount = parseInt(rechargeAmount);
+                    if (amount && amount >= 100) {
+                      processRecharge(amount);
+                      setRechargeAmount('');
+                    } else {
+                      Alert.alert('Invalid Amount', 'Please enter an amount of ₹100 or more.');
+                    }
+                  }}
+                  disabled={isRecharging || !rechargeAmount}
+                  activeOpacity={0.7}
+                >
+                  {isRecharging ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <Text style={styles.rechargeButtonText}>Recharge</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+
             {/* Quick Add Amounts */}
             <Animated.View style={[styles.quickAddCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <Text style={styles.quickAddTitle}>Quick Add</Text>
               <View style={styles.quickAddButtons}>
                 {[100, 200, 500].map((amount, index) => (
-                  <TouchableOpacity key={`quick-add-${amount}-${index}`} style={styles.quickAddButton} activeOpacity={0.7}>
+                  <TouchableOpacity 
+                    key={`quick-add-${amount}-${index}`} 
+                    style={styles.quickAddButton} 
+                    activeOpacity={0.7}
+                    onPress={() => processRecharge(amount)}
+                    disabled={isRecharging}
+                  >
                     <Text style={styles.quickAddText}>₹{amount}</Text>
                   </TouchableOpacity>
                 ))}
@@ -699,6 +956,17 @@ export default function WalletScreen({ navigation }: any) {
           </>
         )}
       </ScrollView>
+
+      {/* Razorpay WebView Modal */}
+      {showRazorpayWebView && webViewOrderData && (
+        <RazorpayWebView
+          visible={showRazorpayWebView}
+          onClose={handleWebViewClose}
+          onSuccess={handleWebViewSuccess}
+          onFailure={handleWebViewFailure}
+          orderData={webViewOrderData}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1124,5 +1392,58 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.md,
     color: Colors.text,
     marginTop: Layout.spacing.md,
+  },
+  rechargeCard: {
+    backgroundColor: Colors.white,
+    marginHorizontal: Layout.spacing.lg,
+    marginBottom: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.lg,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  rechargeTitle: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: Layout.spacing.md,
+  },
+  rechargeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.gray50,
+    borderRadius: Layout.borderRadius.md,
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+  },
+  currencySymbol: {
+    fontSize: Layout.fontSize.lg,
+    fontWeight: '600',
+    color: Colors.text,
+    marginRight: Layout.spacing.sm,
+  },
+  rechargeInput: {
+    flex: 1,
+    fontSize: Layout.fontSize.lg,
+    color: Colors.text,
+    paddingVertical: Layout.spacing.sm,
+  },
+  rechargeButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Layout.spacing.lg,
+    paddingVertical: Layout.spacing.md,
+    borderRadius: Layout.borderRadius.md,
+    marginLeft: Layout.spacing.md,
+  },
+  rechargeButtonDisabled: {
+    backgroundColor: Colors.gray400,
+  },
+  rechargeButtonText: {
+    color: Colors.white,
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
   },
 });
