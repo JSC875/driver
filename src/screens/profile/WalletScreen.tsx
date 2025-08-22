@@ -23,48 +23,11 @@ import { walletService, WalletTransaction } from '../../services/walletService';
 import { getUserIdFromJWT } from '../../utils/jwtDecoder';
 import { initializePayment, PaymentOptions, convertRupeesToPaise, getRazorpayKey, PAYMENT_CONFIG } from '../../utils/razorpay';
 import RazorpayWebView from '../../components/payment/RazorpayWebView';
+import WalletAPITest from '../../components/debug/WalletAPITest';
 
 const { width } = Dimensions.get('window');
 
-// Enhanced wallet transactions with real data structure
-const initialWalletTransactions = [
-  {
-    id: 'initial-1',
-    type: 'credit',
-    amount: 500,
-    description: 'Wallet top-up',
-    date: '2024-01-15',
-    time: '10:30 AM',
-    category: 'topup'
-  },
-  {
-    id: 'initial-2',
-    type: 'credit',
-    amount: 85,
-    description: 'Ride earnings',
-    date: '2024-01-15',
-    time: '09:30 AM',
-    category: 'ride_earnings'
-  },
-  {
-    id: 'initial-3',
-    type: 'credit',
-    amount: 50,
-    description: 'Referral bonus',
-    date: '2024-01-14',
-    time: '06:45 PM',
-    category: 'bonus'
-  },
-  {
-    id: 'initial-4',
-    type: 'debit',
-    amount: 200,
-    description: 'Withdrawal',
-    date: '2024-01-13',
-    time: '02:30 PM',
-    category: 'withdrawal'
-  },
-];
+// Wallet transactions will be fetched from API
 
 export default function WalletScreen({ navigation }: any) {
   const { getToken } = useAuth();
@@ -87,6 +50,7 @@ export default function WalletScreen({ navigation }: any) {
   const [showRazorpayWebView, setShowRazorpayWebView] = useState(false);
   const [webViewOrderData, setWebViewOrderData] = useState<any>(null);
   const [pendingAmount, setPendingAmount] = useState<number>(0);
+  const [showAPITest, setShowAPITest] = useState(false);
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -144,20 +108,37 @@ export default function WalletScreen({ navigation }: any) {
       const balanceResponse = await walletService.getWalletBalance(driverId, token);
       
       if (balanceResponse.success && balanceResponse.data) {
-        setWalletBalance(balanceResponse.data.balance || 0);
-        setRideEarnings(balanceResponse.data.rideEarnings || 0);
-        setTotalEarnings(balanceResponse.data.totalEarnings || 0);
+        // Use actual API response data
+        const balanceData = balanceResponse.data;
+        console.log('💰 Setting wallet balance from API:', balanceData);
+        setWalletBalance(balanceData.balance || 0);
+        setRideEarnings(balanceData.rideEarnings || 0);
+        setTotalEarnings(balanceData.totalEarnings || 0);
       } else {
         console.error('❌ WalletScreen: Failed to fetch wallet balance:', balanceResponse.error);
+        // Set to 0 instead of fallback values
+        setWalletBalance(0);
+        setRideEarnings(0);
+        setTotalEarnings(0);
       }
 
       // Fetch wallet transactions
       const transactionsResponse = await walletService.getWalletTransactions(driverId, token);
       
+      console.log('📋 WalletScreen: Transactions response received');
+      console.log('📋 Success:', transactionsResponse.success);
+      console.log('📋 Has data:', !!transactionsResponse.data);
+      console.log('📋 Error:', transactionsResponse.error);
+      
       if (transactionsResponse.success && transactionsResponse.data) {
         // The API returns { transactions: [], totalTransactions: 0, ... }
-        const apiTransactions = (transactionsResponse.data as any).transactions || [];
+        console.log('📋 Full transactions data:', JSON.stringify(transactionsResponse.data, null, 2));
+        const apiTransactions = transactionsResponse.data.transactions || [];
+        console.log('📋 API transactions array:', apiTransactions);
+        console.log('📋 API transactions length:', apiTransactions.length);
+        console.log('📋 Total transactions from API:', transactionsResponse.data.totalTransactions);
         
+        // Always use the API response, even if empty
         if (apiTransactions.length > 0) {
           // Ensure all transactions have unique IDs
           const transactionsWithIds = apiTransactions.map((transaction: any, index: number) => ({
@@ -165,24 +146,27 @@ export default function WalletScreen({ navigation }: any) {
             id: transaction.id || `api-transaction-${index}-${Date.now()}`,
             type: transaction.type as 'credit' | 'debit'
           })) as WalletTransaction[];
+          console.log('📋 Setting transactions from API:', transactionsWithIds);
           setTransactions(transactionsWithIds);
         } else {
-          // Use fallback transactions if API returns empty array
-          setTransactions(initialWalletTransactions as WalletTransaction[]);
+          // Show empty state instead of fallback data
+          console.log('📋 API returned empty transactions, showing empty state');
+          setTransactions([]);
         }
       } else {
         console.error('❌ WalletScreen: Failed to fetch wallet transactions:', transactionsResponse.error);
-        // Fallback to initial transactions if API fails
-        setTransactions(initialWalletTransactions as WalletTransaction[]);
+        // Show empty state if API fails instead of fallback data
+        console.log('📋 API failed, showing empty state');
+        setTransactions([]);
       }
       
     } catch (error) {
       console.error('❌ WalletScreen: Error fetching wallet data:', error);
-      // Fallback to initial data if API fails
-      setWalletBalance(1250);
-      setRideEarnings(485);
-      setTotalEarnings(1735);
-      setTransactions(initialWalletTransactions as WalletTransaction[]);
+      // Set to 0 instead of fallback data if API fails
+      setWalletBalance(0);
+      setRideEarnings(0);
+      setTotalEarnings(0);
+      setTransactions([]);
     }
   };
 
@@ -669,6 +653,9 @@ export default function WalletScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* API Test Component */}
+      {showAPITest && <WalletAPITest onBack={() => setShowAPITest(false)} />}
+      
       {/* Initial Loading State */}
       {isInitialLoading && (
         <View style={styles.fullScreenLoading}>
@@ -677,8 +664,11 @@ export default function WalletScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* Header */}
-      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
+      {/* Main Wallet Content - Only show when not in API test mode */}
+      {!showAPITest && (
+        <>
+          {/* Header */}
+          <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -690,28 +680,7 @@ export default function WalletScreen({ navigation }: any) {
         <TouchableOpacity 
           style={styles.helpButton} 
           activeOpacity={0.7}
-          onPress={async () => {
-            console.log('🧪 WalletScreen: Manual API test triggered');
-            console.log('🧪 WalletScreen: Current driverId:', driverId);
-            console.log('🧪 WalletScreen: Current walletBalance:', walletBalance);
-            
-            if (driverId) {
-              console.log('🧪 WalletScreen: Calling fetchWalletData with driverId:', driverId);
-              await fetchWalletData(driverId);
-            } else {
-              console.log('❌ WalletScreen: No driver ID available for manual test');
-              console.log('🧪 WalletScreen: Trying to get driver ID from JWT...');
-              try {
-                const token = await getToken();
-                const userId = await getUserIdFromJWT(token);
-                console.log('🧪 WalletScreen: Got driver ID from JWT:', userId);
-                setDriverId(userId);
-                await fetchWalletData(userId);
-              } catch (error) {
-                console.error('❌ WalletScreen: Failed to get driver ID:', error);
-              }
-            }
-          }}
+          onPress={() => setShowAPITest(!showAPITest)}
         >
           <Ionicons name="help-circle-outline" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -890,16 +859,26 @@ export default function WalletScreen({ navigation }: any) {
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
-              <View>
-                {transactions.map((item, index) => {
-                  const key = `transaction-${item.id || index}-${index}`;
-                  return (
-                    <View key={key}>
-                      {renderTransaction({ item })}
-                    </View>
-                  );
-                })}
-              </View>
+                             <View>
+                 {transactions.length > 0 ? (
+                   transactions.map((item, index) => {
+                     const key = `transaction-${item.id || index}-${index}`;
+                     return (
+                       <View key={key}>
+                         {renderTransaction({ item })}
+                       </View>
+                     );
+                   })
+                 ) : (
+                   <View style={styles.emptyTransactionsContainer}>
+                     <Ionicons name="receipt-outline" size={48} color={Colors.gray400} />
+                     <Text style={styles.emptyTransactionsText}>No transactions yet</Text>
+                     <Text style={styles.emptyTransactionsSubtext}>
+                       Your transaction history will appear here
+                     </Text>
+                   </View>
+                 )}
+               </View>
             </Animated.View>
           </>
         ) : (
@@ -956,6 +935,8 @@ export default function WalletScreen({ navigation }: any) {
           </>
         )}
       </ScrollView>
+        </>
+      )}
 
       {/* Razorpay WebView Modal */}
       {showRazorpayWebView && webViewOrderData && (
@@ -1441,9 +1422,27 @@ const styles = StyleSheet.create({
   rechargeButtonDisabled: {
     backgroundColor: Colors.gray400,
   },
-  rechargeButtonText: {
-    color: Colors.white,
-    fontSize: Layout.fontSize.md,
-    fontWeight: '600',
-  },
-});
+     rechargeButtonText: {
+     color: Colors.white,
+     fontSize: Layout.fontSize.md,
+     fontWeight: '600',
+   },
+   emptyTransactionsContainer: {
+     alignItems: 'center',
+     paddingVertical: Layout.spacing.xl,
+     paddingHorizontal: Layout.spacing.lg,
+   },
+   emptyTransactionsText: {
+     fontSize: Layout.fontSize.lg,
+     fontWeight: '600',
+     color: Colors.textSecondary,
+     marginTop: Layout.spacing.md,
+     marginBottom: Layout.spacing.sm,
+   },
+   emptyTransactionsSubtext: {
+     fontSize: Layout.fontSize.sm,
+     color: Colors.textSecondary,
+     textAlign: 'center',
+     opacity: 0.7,
+   },
+ });

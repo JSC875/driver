@@ -35,7 +35,14 @@ export interface WalletTransactionsResponse {
   success: boolean;
   message?: string;
   error?: string;
-  data?: WalletTransaction[];
+  data?: {
+    transactions: WalletTransaction[];
+    totalTransactions: number;
+    driverId: string;
+    size: number;
+    page: number;
+    status: string;
+  };
 }
 
 class WalletService {
@@ -151,6 +158,7 @@ class WalletService {
       console.log('🕐 API call timestamp:', new Date().toISOString());
       console.log('🆔 Clerk Driver ID:', driverId);
       console.log('🆔 Backend Driver ID:', backendDriverId);
+      console.log('🔑 Token (first 20 chars):', token.substring(0, 20) + '...');
 
       const response = await fetch(`${this.baseUrl}/api/wallet/${backendDriverId}/transactions`, {
         method: 'GET',
@@ -178,10 +186,20 @@ class WalletService {
       const data = await response.json();
       console.log('✅ Wallet transactions fetched successfully via API');
       console.log('📊 Full Response Data:', JSON.stringify(data, null, 2));
+      console.log('📊 Response data type:', typeof data);
+      console.log('📊 Response has transactions property:', data.hasOwnProperty('transactions'));
+      console.log('📊 Transactions array length:', data.transactions ? data.transactions.length : 'No transactions property');
 
       return {
         success: true,
-        data: data,
+        data: {
+          transactions: data.transactions || [],
+          totalTransactions: data.totalTransactions || 0,
+          driverId: data.driverId || '',
+          size: data.size || 20,
+          page: data.page || 0,
+          status: data.status || 'success'
+        },
         message: 'Wallet transactions fetched successfully'
       };
     } catch (error) {
