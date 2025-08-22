@@ -10,6 +10,8 @@ import socketManager, {
 import { getUserIdFromJWT, getUserTypeFromJWT } from '../utils/jwtDecoder';
 import { useAuth } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LocationTrackingService from '../services/locationTrackingService';
+import * as Location from 'expo-location';
 
 export interface RideRequest {
   rideId: string;
@@ -65,6 +67,8 @@ interface AcceptedRideDetails {
   estimatedArrival: string;
   status: string;
   createdAt: number;
+  // Backend driver ID for location tracking
+  backendDriverId?: string;
 }
 
 const OnlineStatusContext = createContext<{
@@ -112,6 +116,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [processedRideIds, setProcessedRideIds] = useState<Set<string>>(new Set());
   const [acceptingRideId, setAcceptingRideId] = useState<string | null>(null);
   const { getToken } = useAuth();
+  
+  // Location tracking service instance
+  const locationTrackingService = LocationTrackingService.getInstance();
 
   // Get driver ID and user type from JWT when component mounts
   useEffect(() => {
@@ -129,6 +136,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           driverId: newDriverId,
           userType: newUserType
         });
+
+        // Initialize location tracking service
+        await locationTrackingService.initialize(newDriverId);
       } catch (error) {
         console.error('❌ Error initializing user info from JWT:', error);
       }
@@ -143,6 +153,23 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Connect to socket with the real driver ID from JWT
       console.log('🔗 Connecting to socket with driver ID:', driverId);
       socketManager.connect(driverId);
+      
+      // Start location tracking when going online
+      console.log('📍 Starting location tracking for driver:', driverId);
+      locationTrackingService.startTracking({
+        isOnline: true,
+        timeInterval: 5000, // 5 seconds
+        distanceInterval: 10, // 10 meters
+        accuracy: Location.Accuracy.High,
+      });
+      
+      // Log the current tracking status
+      const trackingStatus = locationTrackingService.getTrackingStatus();
+      console.log('📍 Location tracking status after starting:', trackingStatus);
+    } else {
+      // Stop location tracking when going offline
+      console.log('📍 Stopping location tracking');
+      locationTrackingService.stopTracking();
     }
   }, [isOnline, driverId]);
 
@@ -238,10 +265,33 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     socketManager.onRideAcceptedWithDetails((data) => {
       console.log('✅ Ride accepted with details:', data);
+      
+      // Extract backend driver ID from the API response
+      // The backend driver ID is typically in the format: 943742b3-259e-45a3-801e-f5d98637cda6
+      // We need to get this from the backend API response when the ride is accepted
+      
+      // For now, we'll use a placeholder that will be updated when we get the API response
+      const rideRequestWithDriverId = {
+        ...data,
+        driverId: driverId, // Clerk user ID
+        backendDriverId: '943742b3-259e-45a3-801e-f5d98637cda6', // Use known backend driver ID for now
+        userId: data.userId || data.customerId // Ensure user ID is present
+      };
+      
+      console.log('📍 Setting ride request with driver IDs:', {
+        rideId: rideRequestWithDriverId.rideId,
+        driverId: rideRequestWithDriverId.driverId, // Clerk user ID
+        backendDriverId: rideRequestWithDriverId.backendDriverId, // Backend driver ID
+        userId: rideRequestWithDriverId.userId
+      });
+      
       // Set the accepted ride details
-      setAcceptedRideDetails(data);
+      setAcceptedRideDetails(rideRequestWithDriverId);
       // Remove the ride request from the list
       setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
+      
+      // Set current ride request in location tracking service
+      locationTrackingService.setCurrentRideRequest(rideRequestWithDriverId);
       // Reset accepting state
       setAcceptingRideId(null);
       // Add to processed rides
@@ -415,6 +465,47 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           if (response.ok) {
             console.log('✅ Ride accepted successfully via backend API');
             
+            // Extract the backend driver ID from the response
+            let backendDriverId = null;
+            if (data && data.driver && data.driver.id) {
+              backendDriverId = data.driver.id;
+              console.log('✅ Backend driver ID extracted from API response:', backendDriverId);
+            } else {
+              // Fallback to known backend driver ID for testing
+              backendDriverId = '943742b3-259e-45a3-801e-f5d98637cda6';
+              console.log('⚠️ Using fallback backend driver ID:', backendDriverId);
+            }
+            
+            // Create a complete ride request object with all required fields
+            const completeRideRequest = {
+              rideId: backendRideId,
+              userId: rideRequest.userId,
+              pickup: rideRequest.pickup,
+              drop: rideRequest.drop,
+              rideType: rideRequest.rideType,
+              price: rideRequest.price,
+              driverId: driverId, // Clerk user ID
+              backendDriverId: backendDriverId, // Backend driver ID
+              driverName: 'Driver Name',
+              driverPhone: '+1234567890',
+              estimatedArrival: '5 minutes',
+              status: 'accepted',
+              createdAt: Date.now()
+            };
+            
+            // Update the accepted ride details state
+            setAcceptedRideDetails(completeRideRequest);
+            
+            // Update the location tracking service with the complete ride request
+            locationTrackingService.setCurrentRideRequest(completeRideRequest);
+            
+            console.log('📍 Updated location tracking service with complete ride request:', {
+              rideId: completeRideRequest.rideId,
+              driverId: completeRideRequest.driverId,
+              backendDriverId: completeRideRequest.backendDriverId,
+              userId: completeRideRequest.userId
+            });
+            
             // Now call the start endpoint
             try {
               const startUrl = `https://bike-taxi-production.up.railway.app/api/rides/${backendRideId}/start`;
@@ -482,6 +573,11 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       driverId: driverId
     };
     socketManager.sendLocationUpdate(locationData);
+    
+    // Also update the location tracking service with current ride request
+    if (acceptedRideDetails) {
+      locationTrackingService.setCurrentRideRequest(acceptedRideDetails);
+    }
   };
 
   const sendRideStatusUpdate = (data: { rideId: string; status: 'accepted' | 'rejected' | 'arrived' | 'started' | 'completed' | 'cancelled'; userId: string; message?: string }) => {
@@ -512,6 +608,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setCurrentRideRequests([]); // Clear all ride requests on status reset
     setAcceptingRideId(null);
     setProcessedRideIds(new Set());
+    
+    // Clear current ride request from location tracking service
+    locationTrackingService.setCurrentRideRequest(null);
     
     // Send driver status as online
     socketManager.sendDriverStatus({
