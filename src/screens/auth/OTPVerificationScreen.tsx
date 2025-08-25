@@ -10,6 +10,7 @@ import {
   Alert,
   Animated, // <-- Add Animated import
   Easing,
+  BackHandler, // Add BackHandler import
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,6 +68,16 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     }, 1000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // Handle hardware back button - prevent going back
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Return true to prevent default back behavior
+      return true;
+    });
+
+    return () => backHandler.remove();
   }, []);
 
   // Animate bounce on digit entry
@@ -312,7 +323,25 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
       
       Alert.alert('Success', 'OTP sent successfully');
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      console.error('OTPVerificationScreen - Error resending OTP:', err);
+      
+      let errorMessage = 'Failed to resend OTP. Please try again.';
+      if (err?.errors?.[0]?.message) {
+        errorMessage = err.errors[0].message;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      // Handle specific rate limiting error
+      if (errorMessage.includes('Too many verification code requests')) {
+        Alert.alert(
+          'Rate Limit Exceeded', 
+          'You have requested too many OTP codes. Please wait a few minutes before trying again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     }
   };
 
@@ -323,12 +352,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
         style={styles.keyboardView}
       >
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.text} />
-          </TouchableOpacity>
+          {/* Remove back button to prevent going back after OTP entry */}
         </View>
 
         <View style={styles.content}>
@@ -337,6 +361,9 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
             <Text style={styles.subtitle}>
               We've sent a 6-digit code to{'\n'}
               <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+            </Text>
+            <Text style={styles.infoText}>
+              Please complete the verification to continue
             </Text>
           </View>
 
@@ -435,6 +462,12 @@ const styles = StyleSheet.create({
   phoneNumber: {
     fontWeight: '600',
     color: Colors.text,
+  },
+  infoText: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Layout.spacing.sm,
   },
   otpContainer: {
     flexDirection: 'row',

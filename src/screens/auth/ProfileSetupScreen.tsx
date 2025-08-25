@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  BackHandler, // Add BackHandler import
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,18 @@ export default function ProfileSetupScreen({ navigation }: any) {
   const { getToken } = useAuth();
 
   useAssignUserType('driver');
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        Alert.alert('Profile Setup', 'You can complete your profile later from the settings.');
+        return true; // Prevent default back behavior
+      }
+    );
+
+    return () => backHandler.remove();
+  }, []);
 
   const handleImagePicker = () => {
     Alert.alert(
@@ -101,6 +114,9 @@ export default function ProfileSetupScreen({ navigation }: any) {
             <Text style={styles.title}>Complete Your Profile</Text>
             <Text style={styles.subtitle}>
               Help us personalize your experience
+            </Text>
+            <Text style={styles.infoText}>
+              Almost there! Complete your profile to get started
             </Text>
           </View>
 
@@ -194,6 +210,12 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.md,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  infoText: {
+    fontSize: Layout.fontSize.sm,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: Layout.spacing.sm,
   },
   profileImageContainer: {
     alignItems: 'center',

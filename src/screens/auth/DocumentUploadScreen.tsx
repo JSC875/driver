@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, Alert, StyleSheet, Platform, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, Alert, StyleSheet, Platform, Switch, BackHandler } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUser } from '@clerk/clerk-expo';
@@ -44,6 +44,16 @@ const DocumentUploadScreen = ({ navigation }: DocumentUploadScreenProps) => {
       setEmail(user.primaryEmailAddress.emailAddress);
     }
   }, [user]);
+
+  // Handle hardware back button - prevent going back
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Return true to prevent default back behavior
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, []);
 
   const pickImage = async (setImageFunction: (uri: string) => void) => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -111,6 +121,7 @@ const DocumentUploadScreen = ({ navigation }: DocumentUploadScreenProps) => {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.header}>Driver Registration</Text>
+      <Text style={styles.infoText}>Final step: Upload your documents to complete registration</Text>
       <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
@@ -216,6 +227,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
+    textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 15,
     textAlign: 'center',
   },
   label: {
