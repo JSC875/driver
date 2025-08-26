@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { WalletTransaction } from '../../services/walletService';
+import { downloadReceipt, generateReceiptData } from '../../utils/receiptGenerator';
 
 interface TransactionDetailScreenProps {
   navigation: any;
@@ -321,9 +322,51 @@ export default function TransactionDetailScreen({ navigation, route }: Transacti
 
               <TouchableOpacity
                 style={[styles.actionButton, styles.primaryAction]}
-                onPress={() => {
-                  // Add download receipt functionality here
-                  Alert.alert('Download', 'Receipt downloaded successfully!');
+                onPress={async () => {
+                  try {
+                    if (!selectedTransaction) return;
+                    
+                    // Generate receipt data from transaction
+                    const receiptData = generateReceiptData(
+                      {
+                        rideId: selectedTransaction.id,
+                        pickupAddress: 'Your pickup location',
+                        dropoffAddress: 'Destination',
+                        distance: '5 km',
+                        duration: '15 min',
+                        price: selectedTransaction.amount.toString(),
+                        paymentMethod: selectedTransaction.description === 'Ride payment' ? 'Wallet' : 'Cash',
+                      },
+                      {
+                        name: 'Driver Name',
+                        vehicleModel: 'Vehicle Model',
+                        vehicleNumber: 'Vehicle Number',
+                      }
+                    );
+
+                    const success = await downloadReceipt(receiptData);
+                    
+                    if (success) {
+                      Alert.alert(
+                        'Success',
+                        'Receipt downloaded successfully! You can find it in your downloads folder.',
+                        [{ text: 'OK' }]
+                      );
+                    } else {
+                      Alert.alert(
+                        'Error',
+                        'Failed to download receipt. Please try again.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  } catch (error) {
+                    console.error('Error downloading receipt:', error);
+                    Alert.alert(
+                      'Error',
+                      'An error occurred while downloading the receipt. Please try again.',
+                      [{ text: 'OK' }]
+                    );
+                  }
                 }}
               >
                 <Ionicons name="download-outline" size={20} color={Colors.white} />

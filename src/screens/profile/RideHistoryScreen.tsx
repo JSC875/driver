@@ -7,6 +7,7 @@ import {
   FlatList,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { useRideHistory } from '../../store/RideHistoryContext';
 import { RefreshControl } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { formatRidePrice } from '../../utils/priceUtils';
+import { downloadReceipt, generateReceiptData } from '../../utils/receiptGenerator';
 
 const { width } = Dimensions.get('window');
 
@@ -136,10 +138,61 @@ export default function RideHistoryScreen({ navigation }: any) {
                 <Text style={styles.cancellationText}>{item.cancellationReason}</Text>
               </View>
             ) : (
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={14} color={Colors.accent} />
-                <Text style={styles.ratingText}>{item.rating}</Text>
-              </View>
+              <>
+                <View style={styles.ratingContainer}>
+                  <Ionicons name="star" size={14} color={Colors.accent} />
+                  <Text style={styles.ratingText}>{item.rating}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.downloadButton}
+                  onPress={async () => {
+                    try {
+                      // Generate receipt data from ride history item
+                      const receiptData = generateReceiptData(
+                        {
+                          rideId: item.id,
+                          pickupAddress: item.from,
+                          dropoffAddress: item.to,
+                          distance: item.distance,
+                          duration: item.duration,
+                          price: item.fare.toString(),
+                          paymentMethod: 'Cash',
+                        },
+                        {
+                          name: 'Driver Name',
+                          vehicleModel: 'Vehicle Model',
+                          vehicleNumber: 'Vehicle Number',
+                        }
+                      );
+
+                      const success = await downloadReceipt(receiptData);
+                      
+                      if (success) {
+                        Alert.alert(
+                          'Success',
+                          'Receipt downloaded successfully! You can find it in your downloads folder.',
+                          [{ text: 'OK' }]
+                        );
+                      } else {
+                        Alert.alert(
+                          'Error',
+                          'Failed to download receipt. Please try again.',
+                          [{ text: 'OK' }]
+                        );
+                      }
+                    } catch (error) {
+                      console.error('Error downloading receipt:', error);
+                      Alert.alert(
+                        'Error',
+                        'An error occurred while downloading the receipt. Please try again.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }}
+                >
+                  <Ionicons name="download-outline" size={16} color={Colors.primary} />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>
@@ -467,6 +520,10 @@ const styles = StyleSheet.create({
     fontSize: Layout.fontSize.xs,
     fontWeight: '600',
     color: Colors.text,
+  },
+  downloadButton: {
+    padding: Layout.spacing.xs,
+    marginLeft: Layout.spacing.sm,
   },
   cancellationContainer: {
     flexDirection: 'row',

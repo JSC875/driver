@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import Button from '../../components/common/Button';
 import { useOnlineStatus } from '../../store/OnlineStatusContext';
 import { useAuth } from '@clerk/clerk-expo';
 import HomeScreen from '../home/HomeScreen';
+import { downloadReceipt, generateReceiptData } from '../../utils/receiptGenerator';
 
 function goToHome(navigation: any) {
   navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
@@ -131,6 +133,51 @@ export default function RideSummaryScreen({ navigation, route }: any) {
 
   const handleBookAnother = () => {
     navigation.navigate('Main');
+  };
+
+  const handleDownloadReceipt = async () => {
+    try {
+      // Generate receipt data from current ride information
+      const receiptData = generateReceiptData(
+        {
+          rideId: `RIDE_${Date.now()}`,
+          pickupAddress: 'Your pickup location',
+          dropoffAddress: destination?.name || 'Destination',
+          distance: estimate.distance,
+          duration: estimate.duration,
+          price: estimate.fare,
+          paymentMethod: 'Cash',
+        },
+        {
+          name: driver?.name || 'Driver Name',
+          vehicleModel: driver?.vehicleModel || 'Vehicle Model',
+          vehicleNumber: driver?.vehicleNumber || 'Vehicle Number',
+        }
+      );
+
+      const success = await downloadReceipt(receiptData);
+      
+      if (success) {
+        Alert.alert(
+          'Success',
+          'Receipt downloaded successfully! You can find it in your downloads folder.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to download receipt. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      Alert.alert(
+        'Error',
+        'An error occurred while downloading the receipt. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   return (
@@ -253,6 +300,14 @@ export default function RideSummaryScreen({ navigation, route }: any) {
           onPress={handleSubmitFeedback}
           style={styles.submitButton}
         />
+        
+        <TouchableOpacity
+          style={styles.downloadButton}
+          onPress={handleDownloadReceipt}
+        >
+          <Ionicons name="download-outline" size={20} color={Colors.white} />
+          <Text style={styles.downloadButtonText}>Download Receipt</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -544,6 +599,22 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginBottom: Layout.spacing.sm,
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.accent,
+    paddingVertical: Layout.spacing.md,
+    paddingHorizontal: Layout.spacing.lg,
+    borderRadius: Layout.borderRadius.md,
+    marginTop: Layout.spacing.sm,
+  },
+  downloadButtonText: {
+    fontSize: Layout.fontSize.md,
+    fontWeight: '600',
+    color: Colors.white,
+    marginLeft: Layout.spacing.sm,
   },
   bookAnotherButton: {
     alignItems: 'center',
