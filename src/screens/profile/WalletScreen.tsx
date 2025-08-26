@@ -927,7 +927,10 @@ export default function WalletScreen({ navigation }: any) {
             <Animated.View style={[styles.transactionsCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
               <View style={styles.transactionsHeader}>
                 <Text style={styles.transactionsTitle}>Recent Transactions</Text>
-                <TouchableOpacity activeOpacity={0.7}>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('TransactionDetail', { transactions })}
+                >
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>

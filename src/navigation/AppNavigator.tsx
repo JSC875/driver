@@ -37,6 +37,7 @@ import RideInProgressScreen from '../screens/ride/RideInProgressScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import RideHistoryScreen from '../screens/profile/RideHistoryScreen';
 import WalletScreen from '../screens/profile/WalletScreen';
+import TransactionDetailScreen from '../screens/profile/TransactionDetailScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import PersonalDetailsScreen from '../screens/profile/PersonalDetailsScreen';
@@ -150,6 +151,7 @@ function MainNavigator() {
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="RideHistory" component={RideHistoryScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
+      <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="PersonalDetails" component={PersonalDetailsScreen} />
