@@ -94,6 +94,23 @@ export type DriverLocationUpdateCallback = (data: {
   timestamp: number;
 }) => void;
 
+// Payment event types
+export type PaymentCompletedCallback = (data: {
+  rideId: string;
+  orderId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  timestamp: number;
+}) => void;
+
+export type PaymentReceivedCallback = (data: {
+  rideId: string;
+  amount: number;
+  paymentId: string;
+  timestamp: number;
+}) => void;
+
 // Chat event types
 export type ChatMessageCallback = (data: {
   id: string;
@@ -167,6 +184,10 @@ class SocketManager {
   private onDriverCancellationErrorCallback: DriverCancellationErrorCallback | null = null;
   private onDriverLocationUpdateCallback: DriverLocationUpdateCallback | null = null;
   private onConnectionChangeCallback: ((connected: boolean) => void) | null = null;
+  
+  // Payment event callbacks
+  private onPaymentCompletedCallback: PaymentCompletedCallback | null = null;
+  private onPaymentReceivedCallback: PaymentReceivedCallback | null = null;
   
   // Chat event callbacks
   private onChatMessageCallback: ChatMessageCallback | null = null;
@@ -427,6 +448,22 @@ class SocketManager {
       this.onTypingIndicatorCallback?.(data);
     });
 
+    // Payment event listeners
+    this.socket.on('payment_completed', (data) => {
+      console.log('💰 Payment completed:', data);
+      this.onPaymentCompletedCallback?.(data);
+    });
+
+    this.socket.on('payment_received', (data) => {
+      console.log('💰 Payment received:', data);
+      this.onPaymentReceivedCallback?.(data);
+    });
+
+    this.socket.on('payment_success', (data) => {
+      console.log('✅ Payment success:', data);
+      this.onPaymentCompletedCallback?.(data);
+    });
+
     this.socket.on('messages_read', (data) => {
       console.log('👁️ Messages read:', data);
       this.onMessagesReadCallback?.(data);
@@ -499,10 +536,21 @@ class SocketManager {
     longitude: number;
     userId: string;
     driverId: string;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    timestamp?: number;
   }) {
     if (this.socket && this.isConnected) {
       this.socket.emit('driver_location', data);
-      console.log('📍 Sending location update:', data);
+      console.log('📍 Sending location update:', {
+        lat: data.latitude,
+        lng: data.longitude,
+        accuracy: data.accuracy,
+        speed: data.speed,
+        heading: data.heading,
+        timestamp: data.timestamp ? new Date(data.timestamp).toISOString() : undefined,
+      });
     } else {
       console.warn('⚠️ Socket not connected, cannot send location update');
     }
@@ -651,6 +699,15 @@ class SocketManager {
     this.onConnectionChangeCallback = callback;
   }
 
+  // Payment callback setters
+  onPaymentCompleted(callback: PaymentCompletedCallback) {
+    this.onPaymentCompletedCallback = callback;
+  }
+
+  onPaymentReceived(callback: PaymentReceivedCallback) {
+    this.onPaymentReceivedCallback = callback;
+  }
+
   // Chat callback setters
   onChatMessage(callback: ChatMessageCallback) {
     this.onChatMessageCallback = callback;
@@ -741,6 +798,9 @@ class SocketManager {
     this.onDriverCancellationSuccessCallback = null;
     this.onDriverCancellationErrorCallback = null;
     this.onDriverLocationUpdateCallback = null;
+    this.onConnectionChangeCallback = null;
+    this.onPaymentCompletedCallback = null;
+    this.onPaymentReceivedCallback = null;
     this.onConnectionChangeCallback = null;
     
     // Clear chat callbacks

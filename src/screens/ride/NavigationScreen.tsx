@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 import Polyline from '@mapbox/polyline';
 import { RideRequest } from '../../components/RideRequestScreen';
 import socketManager from '../../utils/socket';
+import LocationTrackingService from '../../services/locationTrackingService';
 
 const { width } = Dimensions.get('window');
 
@@ -395,6 +396,18 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
           >
             <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Pickup</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ backgroundColor: '#FF9800', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#FF9800', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            onPress={() => {
+              const locationService = LocationTrackingService.getInstance();
+              locationService.startContinuousLocationEmission();
+              Alert.alert('Location Emission Started', 'Driver location will now be continuously sent to customer app every 5 seconds.');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="location" size={24} color="#fff" style={{ marginRight: 12 }} />
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Start Location Emission</Text>
           </TouchableOpacity>
           {/* <TouchableOpacity
             style={{ backgroundColor: '#FF6B35', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#FF6B35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}

@@ -11,7 +11,8 @@ import {
   FlatList, 
   TextInput, 
   Image, 
-  Alert 
+  Alert,
+  BackHandler, // Add BackHandler import
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +49,7 @@ interface OtpStepProps {
   otp: string[];
   setOtp: (v: string[]) => void;
   onVerify: () => void;
-  onBack: () => void;
+  onBack?: () => void; // Make optional
   isLoading: boolean;
   error: string;
   resendOtp: () => void;
@@ -61,7 +62,7 @@ interface PhotoStepProps {
   setProfileImage: (v: string | null) => void;
   onComplete: () => void;
   onSkip: () => void;
-  onBack: () => void;
+  onBack?: () => void; // Make optional
   isLoading: boolean;
 }
 
@@ -312,7 +313,7 @@ function OtpStep({
       />
       <Button
         title="Back"
-        onPress={onBack}
+        onPress={onBack || (() => {})}
         fullWidth
         variant="secondary"
         style={{ marginTop: 12 }}
@@ -384,7 +385,7 @@ function PhotoStep({
       {(!firstName.trim() || !lastName.trim()) && (
         <Button
           title="Back to Name Step"
-          onPress={onBack}
+          onPress={onBack || (() => {})}
           fullWidth
           variant="secondary"
           style={{ marginTop: 12 }}
@@ -399,7 +400,7 @@ function PhotoStep({
       />
       <Button
         title="Back"
-        onPress={onBack}
+        onPress={onBack || (() => {})}
         fullWidth
         variant="ghost"
         style={{ marginTop: 12 }}
@@ -461,9 +462,29 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     }
   }, [isSignedIn]);
 
+  // Handle hardware back button - prevent going back from OTP step onwards
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step >= 3) {
+        Alert.alert('Cannot Go Back', 'Please complete the verification process to continue.');
+        return true; // Prevent default back behavior
+      }
+      return false; // Allow default back behavior for earlier steps
+    });
+
+    return () => backHandler.remove();
+  }, [step]);
+
   // Step navigation
   const goToNextStep = () => setStep((s) => s + 1);
-  const goToPrevStep = () => setStep((s) => s - 1);
+  const goToPrevStep = () => {
+    // Prevent going back from OTP step (step 3) and onwards
+    if (step >= 3) {
+      Alert.alert('Cannot Go Back', 'Please complete the verification process to continue.');
+      return;
+    }
+    setStep((s) => s - 1);
+  };
 
 
 
@@ -504,7 +525,17 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
         // @ts-ignore
         const errorMessage = err.errors?.[0]?.message || 'Failed to send OTP';
         console.error('SignUpScreen - Error message:', errorMessage);
-        Alert.alert('Error', errorMessage);
+        
+        // Handle specific rate limiting error
+        if (errorMessage.includes('Too many verification code requests')) {
+          Alert.alert(
+            'Rate Limit Exceeded', 
+            'You have requested too many OTP codes. Please wait a few minutes before trying again.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
       } else {
         console.error('SignUpScreen - Unknown error type:', err);
         Alert.alert('Error', 'Failed to send OTP');
@@ -653,7 +684,25 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       setOtpError('');
       Alert.alert('Success', 'OTP sent successfully');
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      console.error('SignUpScreen - Error resending OTP:', err);
+      
+      let errorMessage = 'Failed to resend OTP. Please try again.';
+      if (err?.errors?.[0]?.message) {
+        errorMessage = err.errors[0].message;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
+      // Handle specific rate limiting error
+      if (errorMessage.includes('Too many verification code requests')) {
+        Alert.alert(
+          'Rate Limit Exceeded', 
+          'You have requested too many OTP codes. Please wait a few minutes before trying again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     }
   };
 
@@ -826,7 +875,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            {step > 1 && (
+            {step > 1 && step < 3 && (
               <TouchableOpacity onPress={goToPrevStep} style={styles.backButton}>
                 <Ionicons name="arrow-back" size={24} color={Colors.text} />
               </TouchableOpacity>
@@ -859,27 +908,37 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
             )}
             
             {step === 3 && (
-              <OtpStep
-                otp={otp}
-                setOtp={setOtp}
-                onVerify={handleVerifyOTP}
-                onBack={goToPrevStep}
-                isLoading={isLoading}
-                error={otpError}
-                resendOtp={handleResendOTP}
-                canResend={canResend}
-                timer={timer}
-              />
+              <>
+                <View style={styles.infoContainer}>
+                  <Text style={styles.infoText}>
+                    Please complete the verification to continue. You cannot go back from this step.
+                  </Text>
+                </View>
+                <OtpStep
+                  otp={otp}
+                  setOtp={setOtp}
+                  onVerify={handleVerifyOTP}
+                  isLoading={isLoading}
+                  error={otpError}
+                  resendOtp={handleResendOTP}
+                  canResend={canResend}
+                  timer={timer}
+                />
+              </>
             )}
             
             {step === 4 && (
               <>
+                <View style={styles.infoContainer}>
+                  <Text style={styles.infoText}>
+                    Final step! Complete your profile to get started.
+                  </Text>
+                </View>
                 <PhotoStep
                   profileImage={profileImage}
                   setProfileImage={setProfileImage}
                   onComplete={handleCompleteProfile}
                   onSkip={handleSkipProfile}
-                  onBack={goToPrevStep}
                   isLoading={isLoading}
                   firstName={firstName}
                   lastName={lastName}
@@ -1059,5 +1118,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     fontSize: 14,
+  },
+  infoContainer: {
+    backgroundColor: Colors.gray100,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  infoText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

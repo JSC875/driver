@@ -25,6 +25,7 @@ import { useLocationStore } from '../../store/useLocationStore';
 
 import { logJWTDetails } from '../../utils/jwtDecoder';
 import { formatRidePrice, getRidePrice } from '../../utils/priceUtils';
+import LocationTrackingStatus from '../../components/common/LocationTrackingStatus';
 
 const { width, height } = Dimensions.get('window');
 
@@ -1635,15 +1636,8 @@ export default function HomeScreen() {
                   longitudeDelta: 0.01,
                 }, 1000);
                 
-                // Send location update to socket server if online
-                if (isOnline && isSocketConnected && location && currentRideRequest) {
-                  sendLocationUpdate({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    userId: currentRideRequest.userId, // Use actual user ID from active ride
-                    driverId: 'driver_001'
-                  });
-                }
+                // Location updates are now handled automatically by the location tracking service
+                // No need to manually send location updates here
               }
             } catch (error) {
               console.log('Location error:', error);
@@ -2040,6 +2034,8 @@ export default function HomeScreen() {
 
       {/* Swipe Instruction - REMOVED */}
 
+      {/* Location Tracking Status (Debug) */}
+      <LocationTrackingStatus visible={__DEV__} />
 
     </SafeAreaView>
     </Animated.View>

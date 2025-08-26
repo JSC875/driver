@@ -80,9 +80,30 @@ function AuthNavigator() {
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
-      <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-      <Stack.Screen name="DocumentUpload" component={DocumentUploadScreen} />
+      <Stack.Screen 
+        name="OTPVerification" 
+        component={OTPVerificationScreen}
+        options={{
+          gestureEnabled: false, // Disable swipe back gesture
+          headerBackVisible: false, // Hide back button in header
+        }}
+      />
+      <Stack.Screen 
+        name="ProfileSetup" 
+        component={ProfileSetupScreen}
+        options={{
+          gestureEnabled: false, // Disable swipe back gesture
+          headerBackVisible: false, // Hide back button in header
+        }}
+      />
+      <Stack.Screen 
+        name="DocumentUpload" 
+        component={DocumentUploadScreen}
+        options={{
+          gestureEnabled: false, // Disable swipe back gesture
+          headerBackVisible: false, // Hide back button in header
+        }}
+      />
     </Stack.Navigator>
   );
 }
