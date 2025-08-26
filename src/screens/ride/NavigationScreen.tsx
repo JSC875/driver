@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Animated, Alert, Dimensions, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Alert, Dimensions, Linking, StatusBar } from 'react-native';
 import MapView, { Marker, Polyline as MapPolyline } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -280,7 +280,9 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
   }, [navigation]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      
       {/* Full Screen Map */}
       <MapView
         ref={mapRef}
@@ -293,6 +295,9 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
           longitudeDelta: 0.05,
         }}
         showsUserLocation
+        showsMyLocationButton={false}
+        showsCompass={true}
+        showsScale={true}
       >
         {pickupCoord && (
           <Marker 
@@ -324,151 +329,394 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
           />
         )}
       </MapView>
-      {/* Top Card with Route Info & Pickup/Dropoff */}
+
+      {/* Enhanced Top Card with Route Info & Pickup/Dropoff */}
       <View style={{
         position: 'absolute',
-        top: insets.top + 16,
+        top: insets.top + 12,
         left: 16,
         right: 16,
-        backgroundColor: '#e0f7fa',
-        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 24,
         padding: 20,
         shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 6,
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 12,
+        backdropFilter: 'blur(10px)',
       }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingVertical: 12, paddingHorizontal: 16 }}>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#222' }}>Navigate to Pickup</Text>
-            <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>ETA: {ride.pickup}</Text>
+        {/* Header with ETA and Cancel */}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          marginBottom: 16,
+          paddingBottom: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: 'rgba(0,0,0,0.08)'
+        }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ 
+              fontSize: 20, 
+              fontWeight: '700', 
+              color: '#1a1a1a',
+              letterSpacing: -0.5
+            }}>
+              Navigate to Pickup
+            </Text>
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              marginTop: 4 
+            }}>
+              <Ionicons name="time-outline" size={14} color="#666" />
+              <Text style={{ 
+                fontSize: 13, 
+                color: '#666', 
+                marginLeft: 4,
+                fontWeight: '500'
+              }}>
+                ETA: {ride.pickup}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
-            style={{ backgroundColor: '#ff4444', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}
+            style={{ 
+              backgroundColor: '#ff4757', 
+              borderRadius: 20, 
+              paddingHorizontal: 16, 
+              paddingVertical: 8,
+              shadowColor: '#ff4757',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4
+            }}
             onPress={handleCancelRide}
             activeOpacity={0.7}
           >
-            <Text style={{ fontSize: 13, color: '#fff', fontWeight: '600' }}>Cancel</Text>
+            <Text style={{ 
+              fontSize: 12, 
+              color: '#fff', 
+              fontWeight: '600',
+              letterSpacing: 0.5
+            }}>
+              Cancel
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Route Points */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Animated.View style={{ flex: 1, opacity: pickupBgOpacity }}>
             <Animated.View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#00e676',
-              borderRadius: 16,
+              backgroundColor: 'rgba(0, 230, 118, 0.1)',
+              borderRadius: 20,
               marginRight: 12,
-              padding: 8,
+              padding: 12,
               transform: [{ scale: pickupPulse }],
+              borderWidth: 1,
+              borderColor: 'rgba(0, 230, 118, 0.2)',
             }}>
-              <View style={{ backgroundColor: '#00C853', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Ionicons name="location" size={16} color="#fff" />
+              <View style={{ 
+                backgroundColor: '#00C853', 
+                borderRadius: 20, 
+                width: 36, 
+                height: 36, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                marginRight: 12,
+                shadowColor: '#00C853',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 4
+              }}>
+                <Ionicons name="location" size={18} color="#fff" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Pickup</Text>
-                <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.pickupAddress}</Text>
+                <Text style={{ 
+                  fontSize: 15, 
+                  fontWeight: '600', 
+                  color: '#1a1a1a', 
+                  marginBottom: 2 
+                }}>
+                  Pickup
+                </Text>
+                <Text style={{ 
+                  fontSize: 12, 
+                  color: '#666', 
+                  lineHeight: 16 
+                }} numberOfLines={2}>
+                  {ride.pickupAddress}
+                </Text>
               </View>
             </Animated.View>
           </Animated.View>
-          <View style={{ marginHorizontal: 12 }}>
-            <Ionicons name="arrow-forward" size={20} color="#1877f2" />
+          
+          <View style={{ 
+            marginHorizontal: 8,
+            backgroundColor: '#1877f2',
+            borderRadius: 12,
+            width: 24,
+            height: 24,
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Ionicons name="arrow-forward" size={14} color="#fff" />
           </View>
+          
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ backgroundColor: '#FF6B35', borderRadius: 16, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-              <Ionicons name="flag" size={16} color="#fff" />
+            <View style={{ 
+              backgroundColor: '#FF6B35', 
+              borderRadius: 20, 
+              width: 36, 
+              height: 36, 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              marginRight: 12,
+              shadowColor: '#FF6B35',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4
+            }}>
+              <Ionicons name="flag" size={18} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#222', marginBottom: 2 }}>Dropoff</Text>
-              <Text style={{ fontSize: 13, color: '#666', lineHeight: 16 }} numberOfLines={2}>{ride.dropoffAddress}</Text>
+              <Text style={{ 
+                fontSize: 15, 
+                fontWeight: '600', 
+                color: '#1a1a1a', 
+                marginBottom: 2 
+              }}>
+                Dropoff
+              </Text>
+              <Text style={{ 
+                fontSize: 12, 
+                color: '#666', 
+                lineHeight: 16 
+              }} numberOfLines={2}>
+                {ride.dropoffAddress}
+              </Text>
             </View>
           </View>
         </View>
       </View>
-      {/* Bottom Action Buttons */}
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 32, zIndex: 10000 }}>
-        <View style={{ gap: 12, paddingHorizontal: 20 }}>
+
+      {/* Enhanced Bottom Action Buttons */}
+      <View style={{ 
+        position: 'absolute', 
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        paddingBottom: insets.bottom > 0 ? insets.bottom + 12 : 24, 
+        zIndex: 10000,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 12,
+        backdropFilter: 'blur(10px)',
+      }}>
+        <View style={{ 
+          gap: 8, 
+          paddingHorizontal: 16,
+          paddingTop: 16
+        }}>
+          {/* Primary Action - Navigate to Pickup */}
           <TouchableOpacity
-            style={{ backgroundColor: '#1877f2', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#1877f2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
+            style={{ 
+              backgroundColor: '#1877f2', 
+              borderRadius: 16, 
+              paddingVertical: 14, 
+              paddingHorizontal: 20, 
+              width: '100%', 
+              alignItems: 'center', 
+              flexDirection: 'row', 
+              justifyContent: 'center', 
+              shadowColor: '#1877f2', 
+              shadowOffset: { width: 0, height: 4 }, 
+              shadowOpacity: 0.3, 
+              shadowRadius: 8, 
+              elevation: 8 
+            }}
             onPress={openGoogleMapsToPickup}
             activeOpacity={0.8}
           >
-            <Ionicons name="navigate" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Pickup</Text>
+            <Ionicons name="navigate" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={{ 
+              color: '#fff', 
+              fontWeight: '600', 
+              fontSize: 16,
+              letterSpacing: 0.3
+            }}>
+              Navigate to Pickup
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={{ backgroundColor: '#FF9800', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#FF9800', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={() => {
-              const locationService = LocationTrackingService.getInstance();
-              locationService.startContinuousLocationEmission();
-              Alert.alert('Location Emission Started', 'Driver location will now be continuously sent to customer app every 5 seconds.');
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="location" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Start Location Emission</Text>
-          </TouchableOpacity>
-          {/* <TouchableOpacity
-            style={{ backgroundColor: '#FF6B35', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#FF6B35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={openGoogleMapsToDropoff}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="flag" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Navigate to Dropoff</Text>
-          </TouchableOpacity> */}
-          <TouchableOpacity
-            style={{ backgroundColor: '#9C27B0', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#9C27B0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={openGoogleMapsFullRoute}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="map" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Full Route (Pickup → Dropoff)</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ backgroundColor: '#007AFF', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#007AFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={() => {
-              console.log('🔗 Navigating to Chat with data:', {
-                ride: { rideId: ride.rideId },
-                user: { name: ride.customerName || 'Customer' },
-                driverId: ride.driverId || 'driver123'
-              });
-              navigation.navigate('Chat', {
-                ride: { rideId: ride.rideId },
-                user: { name: ride.customerName || 'Customer' },
-                driverId: ride.driverId || 'driver123'
-              });
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chatbubble" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Chat with Customer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ backgroundColor: '#00C853', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#00C853', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={() => {
-              // Send driver_arrived event to server
-              socketManager.driverArrived({
-                rideId: ride.rideId,
-                driverId: ride.driverId
-              });
-              
-              // Navigate to OTP screen
-              navigation.navigate('OtpScreen', { ride });
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="checkmark-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Arrived at Pickup</Text>
-          </TouchableOpacity>
-          {/* <TouchableOpacity
-            style={{ backgroundColor: '#ff4444', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 32, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', shadowColor: '#ff4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 }}
-            onPress={handleCancelRide}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close-circle" size={24} color="#fff" style={{ marginRight: 12 }} />
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Cancel Ride</Text>
-          </TouchableOpacity> */}
+
+          {/* Secondary Actions Row */}
+          <View style={{ 
+            flexDirection: 'row', 
+            gap: 8,
+            marginTop: 4
+          }}>
+            {/* Location Emission */}
+            <TouchableOpacity
+              style={{ 
+                flex: 1,
+                backgroundColor: '#FF9800', 
+                borderRadius: 12, 
+                paddingVertical: 12, 
+                paddingHorizontal: 16, 
+                alignItems: 'center', 
+                flexDirection: 'row', 
+                justifyContent: 'center', 
+                shadowColor: '#FF9800', 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.2, 
+                shadowRadius: 4, 
+                elevation: 4 
+              }}
+              onPress={() => {
+                const locationService = LocationTrackingService.getInstance();
+                locationService.startContinuousLocationEmission();
+                Alert.alert('Location Emission Started', 'Driver location will now be continuously sent to customer app every 5 seconds.');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="location" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: '#fff', 
+                fontWeight: '600', 
+                fontSize: 13 
+              }}>
+                Start Location
+              </Text>
+            </TouchableOpacity>
+
+            {/* Chat with Customer */}
+            <TouchableOpacity
+              style={{ 
+                flex: 1,
+                backgroundColor: '#007AFF', 
+                borderRadius: 12, 
+                paddingVertical: 12, 
+                paddingHorizontal: 16, 
+                alignItems: 'center', 
+                flexDirection: 'row', 
+                justifyContent: 'center', 
+                shadowColor: '#007AFF', 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.2, 
+                shadowRadius: 4, 
+                elevation: 4 
+              }}
+              onPress={() => {
+                console.log('🔗 Navigating to Chat with data:', {
+                  ride: { rideId: ride.rideId },
+                  user: { name: ride.customerName || 'Customer' },
+                  driverId: ride.driverId || 'driver123'
+                });
+                navigation.navigate('Chat', {
+                  ride: { rideId: ride.rideId },
+                  user: { name: ride.customerName || 'Customer' },
+                  driverId: ride.driverId || 'driver123'
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chatbubble" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: '#fff', 
+                fontWeight: '600', 
+                fontSize: 13 
+              }}>
+                Chat
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Tertiary Actions Row */}
+          <View style={{ 
+            flexDirection: 'row', 
+            gap: 8,
+            marginTop: 4
+          }}>
+            {/* Full Route */}
+            <TouchableOpacity
+              style={{ 
+                flex: 1,
+                backgroundColor: '#9C27B0', 
+                borderRadius: 12, 
+                paddingVertical: 12, 
+                paddingHorizontal: 16, 
+                alignItems: 'center', 
+                flexDirection: 'row', 
+                justifyContent: 'center', 
+                shadowColor: '#9C27B0', 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.2, 
+                shadowRadius: 4, 
+                elevation: 4 
+              }}
+              onPress={openGoogleMapsFullRoute}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="map" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: '#fff', 
+                fontWeight: '600', 
+                fontSize: 13 
+              }}>
+                Full Route
+              </Text>
+            </TouchableOpacity>
+
+            {/* Arrived at Pickup */}
+            <TouchableOpacity
+              style={{ 
+                flex: 1,
+                backgroundColor: '#00C853', 
+                borderRadius: 12, 
+                paddingVertical: 12, 
+                paddingHorizontal: 16, 
+                alignItems: 'center', 
+                flexDirection: 'row', 
+                justifyContent: 'center', 
+                shadowColor: '#00C853', 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.2, 
+                shadowRadius: 4, 
+                elevation: 4 
+              }}
+              onPress={() => {
+                // Send driver_arrived event to server
+                socketManager.driverArrived({
+                  rideId: ride.rideId,
+                  driverId: ride.driverId
+                });
+                
+                // Navigate to OTP screen
+                navigation.navigate('OtpScreen', { ride });
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={{ 
+                color: '#fff', 
+                fontWeight: '600', 
+                fontSize: 13 
+              }}>
+                Arrived
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
