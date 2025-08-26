@@ -466,10 +466,105 @@ export default function HomeScreen() {
   const pulseAnim = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView>(null); // Typed ref for MapView
   const [isLocating, setIsLocating] = useState(false);
-  const { addRide } = useRideHistory();
+  const { addRide, rides, fetchRideHistory, hasLoaded } = useRideHistory();
   const [currentRideRequests, setCurrentRideRequests] = useState<BackendRideRequest[]>([]); // local mirror if needed
   const [driverCreated, setDriverCreated] = useState(false); // Track if API was called
   const driverCreationStarted = useRef(false);
+  const rideHistoryLoadingRef = useRef(false); // Prevent multiple simultaneous API calls
+
+  // Calculate ride counts - only completed rides
+  const calculateRideCounts = () => {
+    const today = new Date().toDateString();
+    
+    // Filter only completed rides
+    const completedRides = rides.filter(ride => ride.status === 'completed');
+    
+    // Count today's completed rides - use requestedAt if available, otherwise use date
+    const todayRides = completedRides.filter(ride => {
+      let rideDate: Date;
+      
+      // Try to use requestedAt first (from backend), then fallback to date
+      if (ride.requestedAt) {
+        rideDate = new Date(ride.requestedAt);
+      } else if (ride.date) {
+        // If date is already a formatted string, try to parse it
+        rideDate = new Date(ride.date);
+      } else {
+        return false; // Skip if no date available
+      }
+      
+      return rideDate.toDateString() === today;
+    }).length;
+    
+    // Count total lifetime completed rides
+    const totalRides = completedRides.length;
+    
+    // Debug logging
+    console.log('🔍 Ride Count Debug:', {
+      today: today,
+      totalCompletedRides: totalRides,
+      todayCompletedRides: todayRides,
+      sampleRide: completedRides[0] ? {
+        date: completedRides[0].date,
+        requestedAt: completedRides[0].requestedAt,
+        status: completedRides[0].status
+      } : null
+    });
+    
+    return { todayRides, totalRides };
+  };
+
+  const { todayRides, totalRides } = calculateRideCounts();
+
+  // Debug ride counts
+  useEffect(() => {
+    console.log('🚗 Ride Counts Debug:', { todayRides, totalRides, totalRidesInContext: rides.length });
+  }, [todayRides, totalRides, rides.length]);
+
+  // Fetch ride history when component mounts and when screen comes into focus
+  const loadRideHistory = React.useCallback(async () => {
+    // Prevent multiple simultaneous API calls
+    if (rideHistoryLoadingRef.current) {
+      console.log('🚗 Ride history already loading, skipping...');
+      return;
+    }
+
+    rideHistoryLoadingRef.current = true;
+    console.log('🚗 Loading ride history...');
+    
+    try {
+      const token = await getToken({ template: 'driver_app_token' });
+      if (token) {
+        await fetchRideHistory(token);
+      }
+    } catch (error) {
+      console.error('Failed to fetch ride history:', error);
+    } finally {
+      rideHistoryLoadingRef.current = false;
+    }
+  }, [getToken, fetchRideHistory]);
+
+  // Only fetch on mount if not already loaded
+  useEffect(() => {
+    if (!hasLoaded) {
+      loadRideHistory();
+    }
+  }, [loadRideHistory, hasLoaded]);
+
+
+
+  // Refresh ride history when screen comes into focus (with debounce)
+  const lastFocusTime = useRef(0);
+  useFocusEffect(
+    React.useCallback(() => {
+      const now = Date.now();
+      // Only refresh if it's been more than 5 seconds since last focus
+      if (now - lastFocusTime.current > 5000) {
+        lastFocusTime.current = now;
+        loadRideHistory();
+      }
+    }, [loadRideHistory])
+  );
 
   // Swipe gesture state - REMOVED (no more map swiping)
 
@@ -1543,9 +1638,9 @@ export default function HomeScreen() {
           <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
         </TouchableOpacity>
         <View style={styles.speedPill}>
-          <Text style={styles.speedZero}>0</Text>
+          <Text style={styles.speedZero}>{todayRides}</Text>
           <Text style={styles.speedZero}> | </Text>
-          <Text style={styles.speedLimit}>40</Text>
+          <Text style={styles.speedLimit}>{totalRides}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {/* Driver Status Indicator */}

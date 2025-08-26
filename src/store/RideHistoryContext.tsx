@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { rideHistoryService, RideHistoryItem as ApiRideHistoryItem } from '../services/rideHistoryService';
 import { getRidePrice } from '../utils/priceUtils';
 
@@ -17,6 +17,9 @@ export interface RideHistoryItem {
   status: RideStatus;
   rating?: number;
   cancellationReason?: string;
+  requestedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
 }
 
 interface RideHistoryContextType {
@@ -38,7 +41,7 @@ export const RideHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const fetchRideHistory = async (token?: string) => {
+  const fetchRideHistory = useCallback(async (token?: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -64,28 +67,28 @@ export const RideHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const refreshRideHistory = async (token?: string) => {
+  const refreshRideHistory = useCallback(async (token?: string) => {
     console.log('🔄 Refreshing ride history...');
     setHasLoaded(false); // Reset the loaded flag to allow refresh
     await fetchRideHistory(token);
-  };
+  }, [fetchRideHistory]);
 
-  const addRide = (ride: RideHistoryItem) => {
+  const addRide = useCallback((ride: RideHistoryItem) => {
     // Round the fare for easier payment between driver and user
     const roundedRide = {
       ...ride,
       fare: getRidePrice(ride.fare)
     };
     setRides((prev) => [roundedRide, ...prev]);
-  };
+  }, []);
 
-  const clearHistory = () => {
+  const clearHistory = useCallback(() => {
     setRides([]);
     setError(null);
     setHasLoaded(false);
-  };
+  }, []);
 
   // Note: fetchRideHistory will be called from the component with the token
 
