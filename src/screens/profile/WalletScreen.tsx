@@ -34,6 +34,8 @@ export default function WalletScreen({ navigation }: any) {
   const [walletBalance, setWalletBalance] = useState(0);
   const [rideEarnings, setRideEarnings] = useState(0);
   const [totalEarnings, setTotalEarnings] = useState(0);
+  const [todayCreditEarnings, setTodayCreditEarnings] = useState(0);
+  const [totalCreditEarnings, setTotalCreditEarnings] = useState(0);
   const [selectedTab, setSelectedTab] = useState('wallet');
   const [isLoading, setIsLoading] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
@@ -140,15 +142,48 @@ export default function WalletScreen({ navigation }: any) {
         
         // Always use the API response, even if empty
         if (apiTransactions.length > 0) {
-          // Ensure all transactions have unique IDs
-          const transactionsWithIds = apiTransactions.map((transaction: any, index: number) => ({
-            ...transaction,
-            id: transaction.id || `api-transaction-${index}-${Date.now()}`,
-            type: transaction.type as 'credit' | 'debit'
-          })) as WalletTransaction[];
-          console.log('📋 Setting transactions from API:', transactionsWithIds);
-          setTransactions(transactionsWithIds);
-        } else {
+          // Process and clean up transaction data
+          const transactionsWithIds = apiTransactions.map((transaction: any, index: number) => {
+                         // Clean up description - remove payment ID details for better UX
+             let cleanDescription = transaction.description || '';
+             if (cleanDescription.includes('Wallet recharge via Razorpay')) {
+               cleanDescription = 'Wallet recharge';
+             } else if (cleanDescription.includes('Ride payment')) {
+               cleanDescription = 'Ride payment';
+             } else if (cleanDescription.includes('Payment ID:')) {
+               // Remove payment ID from any description
+               cleanDescription = cleanDescription.split(' - Payment ID:')[0];
+             }
+            
+                         // Determine transaction type based on transactionType
+             let transactionType: 'credit' | 'debit' = 'credit';
+             if (transaction.transactionType === 'RECHARGE' || transaction.transactionType === 'CREDIT') {
+               transactionType = 'credit';
+             } else if (transaction.transactionType === 'DEBIT' || transaction.transactionType === 'WITHDRAWAL') {
+               transactionType = 'debit';
+             }
+            
+            // Format date and time from timestamp
+            const timestamp = new Date(transaction.timestamp);
+            const date = timestamp.toLocaleDateString();
+            const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            return {
+              ...transaction,
+              id: transaction.id || `api-transaction-${index}-${Date.now()}`,
+              type: transactionType,
+              description: cleanDescription,
+              date: date,
+              time: time,
+              category: transaction.transactionType?.toLowerCase() || 'transaction'
+            };
+          }) as WalletTransaction[];
+                     console.log('📋 Setting transactions from API:', transactionsWithIds);
+           setTransactions(transactionsWithIds);
+           
+           // Calculate earnings from credit transactions
+           calculateCreditEarnings(transactionsWithIds);
+         } else {
           // Show empty state instead of fallback data
           console.log('📋 API returned empty transactions, showing empty state');
           setTransactions([]);
@@ -166,9 +201,30 @@ export default function WalletScreen({ navigation }: any) {
       setWalletBalance(0);
       setRideEarnings(0);
       setTotalEarnings(0);
-      setTransactions([]);
-    }
-  };
+             setTransactions([]);
+     }
+   };
+
+   const calculateCreditEarnings = (transactions: WalletTransaction[]) => {
+     const today = new Date().toLocaleDateString();
+     let todayRideEarnings = 0;
+     let totalRideEarnings = 0;
+     
+     transactions.forEach(transaction => {
+       if (transaction.type === 'credit' && transaction.description === 'Ride payment') {
+         totalRideEarnings += transaction.amount || 0;
+         
+         // Check if transaction is from today
+         if (transaction.date === today) {
+           todayRideEarnings += transaction.amount || 0;
+         }
+       }
+     });
+     
+     console.log('💰 Calculated ride earnings - Today:', todayRideEarnings, 'Total:', totalRideEarnings);
+     setTodayCreditEarnings(todayRideEarnings);
+     setTotalCreditEarnings(totalRideEarnings);
+   };
 
   const initializeSocketConnection = async () => {
     try {
@@ -226,16 +282,21 @@ export default function WalletScreen({ navigation }: any) {
           id: `payment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           type: 'credit',
           amount: amount,
-          description: `Ride payment - ${paymentData.rideId || 'Ride'}`,
+          description: 'Ride payment',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           category: 'ride_earnings'
         };
         
-        setTransactions(prev => [newTransaction, ...prev]);
-      }
-    }
-  };
+                 setTransactions(prev => {
+           const updatedTransactions = [newTransaction, ...prev];
+           // Recalculate credit earnings with new transaction
+           calculateCreditEarnings(updatedTransactions);
+           return updatedTransactions;
+         });
+       }
+     }
+   };
 
   const handleWithdraw = async () => {
     if (walletBalance <= 0) {
@@ -324,7 +385,7 @@ export default function WalletScreen({ navigation }: any) {
           id: `withdrawal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           type: 'debit',
           amount: amount,
-          description: 'Withdrawal to bank account',
+          description: 'Withdrawal',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           category: 'withdrawal'
@@ -487,18 +548,23 @@ export default function WalletScreen({ navigation }: any) {
       const newBalance = walletBalance + amount;
       setWalletBalance(newBalance);
       
-      // Add recharge transaction to local state
-      const newTransaction: WalletTransaction = {
-        id: `recharge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type: 'credit',
-        amount: amount,
-        description: 'Wallet recharge via Razorpay (Development Mode)',
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        category: 'topup'
-      };
+              // Add recharge transaction to local state
+        const newTransaction: WalletTransaction = {
+          id: `recharge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: 'credit',
+          amount: amount,
+          description: 'Wallet recharge',
+          date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          category: 'topup'
+        };
       
-      setTransactions(prev => [newTransaction, ...prev]);
+      setTransactions(prev => {
+        const updatedTransactions = [newTransaction, ...prev];
+        // Recalculate credit earnings with new transaction
+        calculateCreditEarnings(updatedTransactions);
+        return updatedTransactions;
+      });
       
       Alert.alert(
         'Recharge Successful',
@@ -542,13 +608,18 @@ export default function WalletScreen({ navigation }: any) {
           id: `recharge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           type: 'credit',
           amount: callbackData.amount || 0,
-          description: 'Wallet recharge via Razorpay',
+          description: 'Wallet recharge',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           category: 'topup'
         };
         
-        setTransactions(prev => [newTransaction, ...prev]);
+        setTransactions(prev => {
+          const updatedTransactions = [newTransaction, ...prev];
+          // Recalculate credit earnings with new transaction
+          calculateCreditEarnings(updatedTransactions);
+          return updatedTransactions;
+        });
         
         Alert.alert(
           'Recharge Successful',
@@ -769,32 +840,33 @@ export default function WalletScreen({ navigation }: any) {
                     <Ionicons name="refresh" size={20} color={Colors.white} />
                   )}
                 </TouchableOpacity>
-                <Button
-                  title="Withdraw"
-                  onPress={handleWithdraw}
-                  disabled={isWithdrawing || walletBalance <= 0}
-                  style={styles.withdrawButton}
-                  loading={isWithdrawing}
-                />
+                                 <Button
+                   title="Withdraw"
+                   onPress={handleWithdraw}
+                   disabled={isWithdrawing || walletBalance <= 0}
+                   variant="outline"
+                   style={styles.withdrawButtonStyle}
+                   loading={isWithdrawing}
+                 />
               </View>
             </Animated.View>
 
-            {/* Earnings Summary */}
-            <Animated.View style={[styles.earningsCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-              <Text style={styles.earningsTitle}>Earnings Summary</Text>
-              <View style={styles.earningsGrid}>
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsLabel}>Today's Earnings</Text>
-                  <Text style={styles.earningsAmount}>₹{rideEarnings}</Text>
-                  <Text style={styles.earningsSubtext}>From rides</Text>
-                </View>
-                <View style={styles.earningsItem}>
-                  <Text style={styles.earningsLabel}>Total Earnings</Text>
-                  <Text style={styles.earningsAmount}>₹{totalEarnings}</Text>
-                  <Text style={styles.earningsSubtext}>All time</Text>
-                </View>
-              </View>
-            </Animated.View>
+                         {/* Earnings Summary */}
+             <Animated.View style={[styles.earningsCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+               <Text style={styles.earningsTitle}>Earnings Summary</Text>
+               <View style={styles.earningsGrid}>
+                 <View style={styles.earningsItem}>
+                   <Text style={styles.earningsLabel}>Today's Earnings</Text>
+                   <Text style={styles.earningsAmount}>₹{todayCreditEarnings}</Text>
+                   <Text style={styles.earningsSubtext}>From ride payments</Text>
+                 </View>
+                 <View style={styles.earningsItem}>
+                   <Text style={styles.earningsLabel}>Total Earnings</Text>
+                   <Text style={styles.earningsAmount}>₹{totalCreditEarnings}</Text>
+                   <Text style={styles.earningsSubtext}>Lifetime ride payments</Text>
+                 </View>
+               </View>
+             </Animated.View>
 
             {/* Custom Recharge Input */}
             <Animated.View style={[styles.rechargeCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -1045,10 +1117,25 @@ const styles = StyleSheet.create({
     borderRadius: Layout.borderRadius.md,
     marginRight: Layout.spacing.md,
   },
-  withdrawButton: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
+     withdrawButton: {
+     flex: 1,
+     backgroundColor: Colors.white,
+   },
+   withdrawButtonStyle: {
+     flex: 1,
+     backgroundColor: Colors.white,
+     borderRadius: Layout.borderRadius.md,
+     paddingVertical: Layout.spacing.md,
+     paddingHorizontal: Layout.spacing.lg,
+     marginLeft: Layout.spacing.md,
+     shadowColor: Colors.shadow,
+     shadowOffset: { width: 0, height: 2 },
+     shadowOpacity: 0.1,
+     shadowRadius: 4,
+     elevation: 2,
+     borderColor: Colors.primary,
+     borderWidth: 1,
+   },
   paymentNotification: {
     position: 'absolute',
     top: 20,
