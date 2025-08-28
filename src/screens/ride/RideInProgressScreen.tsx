@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Location from 'expo-location';
 import Polyline from '@mapbox/polyline';
 import socketManager from '../../utils/socket';
+import CancelRideButton from '../../components/CancelRideButton';
 
 const { width } = Dimensions.get('window');
 
@@ -400,7 +401,15 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
               </Text>
             </View>
           </View>
-          <TouchableOpacity
+          <CancelRideButton
+            rideId={ride.rideId}
+            driverId={ride.driverId}
+            rideDetails={{
+              pickupAddress: ride.pickupAddress,
+              dropoffAddress: ride.dropoffAddress,
+              price: ride.price,
+            }}
+            onSuccess={() => navigation.navigate('Home')}
             style={{ 
               backgroundColor: '#ff4757', 
               borderRadius: 20, 
@@ -412,18 +421,8 @@ export default function RideInProgressScreen({ route, navigation }: RideInProgre
               shadowRadius: 4,
               elevation: 4
             }}
-            onPress={handleCancelRide}
-            activeOpacity={0.7}
-          >
-            <Text style={{ 
-              fontSize: 12, 
-              color: '#fff', 
-              fontWeight: '600',
-              letterSpacing: 0.5
-            }}>
-              Cancel
-            </Text>
-          </TouchableOpacity>
+            showIcon={false}
+          />
         </View>
 
         {/* Route Points */}

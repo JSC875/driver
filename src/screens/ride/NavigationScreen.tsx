@@ -8,6 +8,7 @@ import Polyline from '@mapbox/polyline';
 import { RideRequest } from '../../components/RideRequestScreen';
 import socketManager from '../../utils/socket';
 import LocationTrackingService from '../../services/locationTrackingService';
+import CancelRideButton from '../../components/CancelRideButton';
 
 const { width } = Dimensions.get('window');
 
@@ -268,13 +269,22 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
       const handleDriverCancellationSuccess = (data: any) => {
         console.log('✅ Driver cancellation success received in NavigationScreen:', data);
         // Navigate to home screen after successful cancellation
-        navigation.navigate('Home');
+        // Use replace instead of navigate to prevent going back to this screen
+        navigation.replace('Home');
+      };
+
+      const handleRideCancelled = (data: any) => {
+        console.log('❌ Ride cancelled event received in NavigationScreen:', data);
+        // Also handle the general ride_cancelled event
+        navigation.replace('Home');
       };
 
       socket.on('driver_cancellation_success', handleDriverCancellationSuccess);
+      socket.on('ride_cancelled', handleRideCancelled);
 
       return () => {
         socket.off('driver_cancellation_success', handleDriverCancellationSuccess);
+        socket.off('ride_cancelled', handleRideCancelled);
       };
     }
   }, [navigation]);
@@ -380,7 +390,15 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
               </Text>
             </View>
           </View>
-          <TouchableOpacity
+          <CancelRideButton
+            rideId={ride.rideId}
+            driverId={ride.driverId}
+            rideDetails={{
+              pickupAddress: ride.pickupAddress,
+              dropoffAddress: ride.dropoffAddress,
+              price: ride.price,
+            }}
+            onSuccess={() => navigation.navigate('Home')}
             style={{ 
               backgroundColor: '#ff4757', 
               borderRadius: 20, 
@@ -392,18 +410,9 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
               shadowRadius: 4,
               elevation: 4
             }}
-            onPress={handleCancelRide}
-            activeOpacity={0.7}
-          >
-            <Text style={{ 
-              fontSize: 12, 
-              color: '#fff', 
-              fontWeight: '600',
-              letterSpacing: 0.5
-            }}>
-              Cancel
-            </Text>
-          </TouchableOpacity>
+            showIcon={false}
+          />
+
         </View>
 
         {/* Route Points */}
