@@ -16,6 +16,8 @@ import { Colors } from '../../constants/Colors';
 import { Layout } from '../../constants/Layout';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { walletService, WalletBalanceResponse } from '../../services/walletService';
+import { useRideHistory } from '../../store/RideHistoryContext';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -28,23 +30,38 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { getToken } = useAuth();
+  
+  // State for earnings and stats
+  const [earningsData, setEarningsData] = useState<WalletBalanceResponse | null>(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  const [earningsError, setEarningsError] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  
+  // Get ride history for total rides count
+  const { rides, fetchRideHistory } = useRideHistory();
 
+  // Fetch driver details, earnings, and ride history
   useEffect(() => {
-    const fetchDriverDetails = async () => {
+    let isMounted = true;
+    
+    const fetchAllData = async () => {
+      if (!isMounted) return;
+      
       setLoading(true);
       setError(null);
+      setEarningsLoading(true);
+      setEarningsError(null);
+      
       try {
-        // Get the token - the /api/drivers/me endpoint uses JWT authentication
         const token = await getToken();
         console.log('[ProfileScreen] Retrieved token:', token);
         if (!token) {
           setError('No auth token found.');
           console.error('[ProfileScreen] No auth token found.');
-          setLoading(false);
           return;
         }
         
-        // Use the correct endpoint with proper JWT authentication
+        // Fetch driver details
         const url = 'https://bike-taxi-production.up.railway.app/api/drivers/me';
         console.log('[ProfileScreen] Fetching driver details from:', url);
         const response = await fetch(url, {
@@ -61,22 +78,74 @@ export default function ProfileScreen() {
         if (!response.ok) {
           setError('Failed to fetch driver details.');
           console.error('[ProfileScreen] Failed to fetch driver details. Status:', response.status);
-          setLoading(false);
-          return;
+        } else {
+          const data = await response.json();
+          console.log('[ProfileScreen] Backend response data:', data);
+          if (isMounted) {
+            setDriverDetails(data);
+          }
         }
-        const data = await response.json();
-        console.log('[ProfileScreen] Backend response data:', data);
-        setDriverDetails(data);
+        
+        // Fetch earnings data and transactions
+        try {
+          console.log('[ProfileScreen] Fetching earnings data...');
+          const earningsResponse = await walletService.getWalletBalance(user?.id || '', token);
+          console.log('[ProfileScreen] Earnings response:', earningsResponse);
+          
+          if (earningsResponse.success && isMounted) {
+            setEarningsData(earningsResponse);
+          } else if (isMounted) {
+            setEarningsError(earningsResponse.error || 'Failed to fetch earnings');
+            console.error('[ProfileScreen] Failed to fetch earnings:', earningsResponse.error);
+          }
+          
+                     // Fetch transactions to calculate total earnings
+           console.log('[ProfileScreen] Fetching transactions...');
+           const transactionsResponse = await walletService.getWalletTransactions(user?.id || '', token);
+           console.log('[ProfileScreen] Transactions response:', transactionsResponse);
+           
+           if (transactionsResponse.success && transactionsResponse.data && isMounted) {
+             const fetchedTransactions = transactionsResponse.data.transactions || [];
+             console.log('[ProfileScreen] Setting transactions:', fetchedTransactions);
+             setTransactions(fetchedTransactions);
+           } else {
+             console.log('[ProfileScreen] Failed to fetch transactions or no data');
+           }
+        } catch (earningsErr) {
+          if (isMounted) {
+            setEarningsError('Failed to fetch earnings data');
+          }
+          console.error('[ProfileScreen] Error fetching earnings:', earningsErr);
+        }
+        
+        // Fetch ride history for total rides count
+        try {
+          console.log('[ProfileScreen] Fetching ride history...');
+          await fetchRideHistory(token);
+        } catch (rideErr) {
+          console.error('[ProfileScreen] Error fetching ride history:', rideErr);
+        }
+        
       } catch (err) {
-        setError('An error occurred while fetching driver details.');
-        console.error('[ProfileScreen] Error while fetching driver details:', err);
+        if (isMounted) {
+          setError('An error occurred while fetching data.');
+        }
+        console.error('[ProfileScreen] Error while fetching data:', err);
       } finally {
-        setLoading(false);
-        console.log('[ProfileScreen] Finished fetching driver details.');
+        if (isMounted) {
+          setLoading(false);
+          setEarningsLoading(false);
+        }
+        console.log('[ProfileScreen] Finished fetching all data.');
       }
     };
-    fetchDriverDetails();
-  }, []);
+    
+    fetchAllData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Remove dependencies to prevent multiple calls
 
   useEffect(() => {
     Animated.parallel([
@@ -99,6 +168,14 @@ export default function ProfileScreen() {
   };
 
   const getUserName = () => {
+    // First try to get name from driver details (backend data)
+    if (driverDetails?.firstName && driverDetails?.lastName) {
+      return `${driverDetails.firstName} ${driverDetails.lastName}`;
+    } else if (driverDetails?.firstName) {
+      return driverDetails.firstName;
+    }
+    
+    // Fallback to Clerk user data
     if (user?.firstName && user?.lastName) {
       return `${user.firstName} ${user.lastName}`;
     } else if (user?.firstName) {
@@ -106,21 +183,139 @@ export default function ProfileScreen() {
     } else if (user?.fullName) {
       return user.fullName;
     }
+    
     return 'User';
   };
 
-  // Demo values for stats (replace with real data if available)
-  const totalRides = 47;
-  const totalEarnings = '₹2,340';
-  const rating = 4.8;
+  // Calculate real stats from backend data
+  const calculateStats = () => {
+    // Total rides from ride history (completed rides only)
+    const totalRides = rides.filter(ride => ride.status === 'completed').length;
+    
+    // Calculate total earnings from transactions (same as wallet section)
+    let totalEarnings = 0;
+    let todayEarnings = 0;
+    const today = new Date().toLocaleDateString();
+    
+    console.log('[ProfileScreen] Calculating earnings from transactions:', transactions.length, 'transactions');
+    console.log('[ProfileScreen] Today\'s date:', today);
+    
+         transactions.forEach((transaction, index) => {
+       console.log(`[ProfileScreen] Transaction ${index}:`, {
+         type: transaction.type,
+         transactionType: transaction.transactionType,
+         description: transaction.description,
+         amount: transaction.amount,
+         date: transaction.date,
+         timestamp: transaction.timestamp
+       });
+       
+       // Check for ride payment transactions - handle both processed and raw transaction data
+       const isRidePayment = (
+         (transaction.type === 'credit' && transaction.description === 'Ride payment') ||
+         (transaction.transactionType === 'CREDIT' && transaction.description?.includes('Ride payment'))
+       );
+       
+       if (isRidePayment) {
+         const amount = transaction.amount || 0;
+         totalEarnings += amount;
+         console.log('[ProfileScreen] Adding to total earnings:', amount);
+         
+         // Check if transaction is from today
+         const transactionDate = transaction.date || new Date(transaction.timestamp).toLocaleDateString();
+         if (transactionDate === today) {
+           todayEarnings += amount;
+           console.log('[ProfileScreen] Adding to today\'s earnings:', amount);
+         }
+       }
+     });
+    
+    console.log('[ProfileScreen] Final calculations:', {
+      totalEarnings,
+      todayEarnings,
+      totalRides
+    });
+    
+    // Rating from driver details or default
+    const rating = driverDetails?.rating || 4.8;
+    
+    return {
+      totalRides,
+      totalEarnings,
+      todayEarnings,
+      rating
+    };
+  };
+  
+  const { totalRides, totalEarnings, todayEarnings, rating } = calculateStats();
+
+  // Memoize refresh function to prevent unnecessary re-renders
+  const handleRefresh = useCallback(async () => {
+    // Prevent multiple simultaneous refresh calls
+    if (loading || earningsLoading) {
+      console.log('[ProfileScreen] Refresh already in progress, skipping...');
+      return;
+    }
+    
+    setLoading(true);
+    setEarningsLoading(true);
+    setError(null);
+    setEarningsError(null);
+    
+    try {
+      const token = await getToken();
+      if (token) {
+        // Refresh ride history
+        await fetchRideHistory(token);
+        // Refresh earnings and transactions
+        const earningsResponse = await walletService.getWalletBalance(user?.id || '', token);
+        if (earningsResponse.success) {
+          setEarningsData(earningsResponse);
+        } else {
+          setEarningsError(earningsResponse.error || 'Failed to refresh earnings');
+        }
+        
+        // Refresh transactions
+        const transactionsResponse = await walletService.getWalletTransactions(user?.id || '', token);
+        if (transactionsResponse.success && transactionsResponse.data) {
+          setTransactions(transactionsResponse.data.transactions || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setError('Failed to refresh data');
+    } finally {
+      setLoading(false);
+      setEarningsLoading(false);
+    }
+  }, [loading, earningsLoading, getToken, user?.id, fetchRideHistory]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, marginTop: 8 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
-          <Ionicons name="arrow-back" size={26} color={Colors.primary} />
+      <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
+            <Ionicons name="arrow-back" size={26} color={Colors.primary} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: Colors.text, marginLeft: 8 }}>Profile</Text>
+        </View>
+                 <TouchableOpacity 
+           onPress={handleRefresh}
+                       style={{ 
+              padding: 8,
+              opacity: (loading || earningsLoading) ? 0.5 : 1
+            }}
+            disabled={loading || earningsLoading}
+          >
+           <Ionicons 
+             name="refresh" 
+             size={24} 
+             color={Colors.primary}
+             style={{
+               transform: [{ rotate: (loading || earningsLoading) ? '180deg' : '0deg' }]
+             }}
+           />
         </TouchableOpacity>
-        <Text style={{ fontSize: 22, fontWeight: 'bold', color: Colors.text, marginLeft: 8 }}>Profile</Text>
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.profileCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>  
@@ -130,15 +325,21 @@ export default function ProfileScreen() {
           <Text style={styles.profileName}>{getUserName()}</Text>
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{totalRides}</Text>
+              <Text style={styles.statValue}>
+                {loading ? '...' : totalRides}
+              </Text>
               <Text style={styles.statLabel}>Total Rides</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{totalEarnings}</Text>
+              <Text style={styles.statValue}>
+                {earningsLoading ? '...' : `₹${totalEarnings.toLocaleString()}`}
+              </Text>
               <Text style={styles.statLabel}>Total Earnings</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{rating}</Text>
+              <Text style={styles.statValue}>
+                {loading ? '...' : rating.toFixed(1)}
+              </Text>
               <Text style={styles.statLabel}>Rating</Text>
             </View>
           </View>
@@ -172,6 +373,15 @@ export default function ProfileScreen() {
             <Text>No driver details found.</Text>
           )}
         </View>
+
+
+
+        {/* Error Display */}
+        {earningsError && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>⚠️ {earningsError}</Text>
+          </View>
+        )}
       </ScrollView>
       <View style={{ padding: 24 }}>
         <TouchableOpacity
@@ -281,5 +491,34 @@ const styles = StyleSheet.create({
     color: Colors.text,
     flex: 1,
     textAlign: 'right',
+  },
+  totalEarningsRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: Layout.spacing.sm,
+    marginTop: Layout.spacing.sm,
+  },
+  totalEarningsLabel: {
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  totalEarningsValue: {
+    fontWeight: 'bold',
+    color: Colors.primary,
+    fontSize: Layout.fontSize.md,
+  },
+  errorCard: {
+    width: '100%',
+    backgroundColor: '#FEF2F2',
+    borderRadius: Layout.borderRadius.lg,
+    padding: Layout.spacing.lg,
+    marginTop: Layout.spacing.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    fontSize: Layout.fontSize.sm,
+    color: '#DC2626',
+    textAlign: 'center',
   },
 });

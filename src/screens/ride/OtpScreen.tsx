@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import socketManager from '../../utils/socket';
 import rideService from '../../services/rideService';
+import CancelRideButton from '../../components/CancelRideButton';
 
 interface OtpScreenProps {
   route: any;
@@ -304,9 +305,30 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
         alignItems: 'center',
         transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }],
       }}>
-        <TouchableOpacity onPress={handleCancelRide} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
-          <Ionicons name="close" size={26} color="#888" />
-        </TouchableOpacity>
+        <View style={{ position: 'absolute', top: 18, right: 18, zIndex: 10 }}>
+          <CancelRideButton
+            rideId={ride.rideId}
+            driverId={ride.driverId}
+            rideDetails={{
+              pickupAddress: ride.pickupAddress,
+              dropoffAddress: ride.dropoffAddress,
+              price: ride.price,
+            }}
+            onSuccess={() => navigation.navigate('Home')}
+            style={{ 
+              backgroundColor: '#ff4757', 
+              paddingHorizontal: 12, 
+              paddingVertical: 6, 
+              borderRadius: 16,
+              shadowColor: '#ff4757',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4
+            }}
+            showIcon={true}
+          />
+        </View>
         <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 10, color: '#1877f2', letterSpacing: 1 }}>Enter OTP</Text>
         <Text style={{ fontSize: 17, marginBottom: 28, color: '#444', textAlign: 'center' }}>Enter the 4-digit code to start your ride</Text>
         
@@ -378,13 +400,7 @@ export default function OtpScreen({ route, navigation }: OtpScreenProps) {
           </TouchableOpacity>
         )}
         
-        {/* <TouchableOpacity
-          style={{ backgroundColor: '#ff4444', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
-          onPress={handleCancelRide}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Cancel Ride</Text>
-        </TouchableOpacity> */}
+
         {submitted && (
           <Animated.View style={{ marginTop: 18, opacity: checkAnim, transform: [{ scale: checkAnim }] }}>
             <Ionicons name="checkmark-circle" size={48} color="#22C55E" />
