@@ -1,4 +1,5 @@
 import { useAuth } from '@clerk/clerk-expo';
+import { serviceAvailabilityService, LocationData } from './serviceAvailabilityService';
 
 export interface CompleteRideResponse {
   success: boolean;
@@ -16,6 +17,19 @@ export interface VerifyOtpResponse {
 
 class RideService {
   private baseUrl = 'https://bike-taxi-production.up.railway.app';
+
+  /**
+   * Check service availability before allowing ride operations
+   */
+  async checkServiceAvailability(location: LocationData): Promise<boolean> {
+    try {
+      const result = await serviceAvailabilityService.checkServiceAvailability(location);
+      return result.success && result.data.isAvailable;
+    } catch (error) {
+      console.error('❌ Service availability check failed:', error);
+      return false;
+    }
+  }
 
   async verifyOtp(rideId: string, otp: string, token?: string): Promise<VerifyOtpResponse> {
     try {
