@@ -12,6 +12,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LocationTrackingService from '../services/locationTrackingService';
 import * as Location from 'expo-location';
+import { stopAllNotificationSounds } from '../components/RideRequestScreen';
 
 export interface RideRequest {
   rideId: string;
@@ -225,6 +226,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         newSet.delete(data.rideId);
         return newSet;
       });
+      
+      // Stop notification sounds when ride is taken by another driver
+      stopAllNotificationSounds();
     });
 
     socketManager.onRideResponseError((data) => {
@@ -238,6 +242,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setAcceptedRideDetails(null);
         setCurrentRideRequests([]); // Clear all ride requests on busy error
         setProcessedRideIds(new Set());
+        
+        // Stop notification sounds when resetting due to busy error
+        stopAllNotificationSounds();
         
         // Send driver status as online
         socketManager.sendDriverStatus({
@@ -261,6 +268,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
       // Reset accepting state
       setAcceptingRideId(null);
+      
+      // Stop notification sounds when ride response is confirmed
+      stopAllNotificationSounds();
     });
 
     socketManager.onRideAcceptedWithDetails((data) => {
@@ -289,6 +299,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setAcceptedRideDetails(rideRequestWithDriverId);
       // Remove the ride request from the list
       setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== data.rideId));
+      
+      // Stop notification sounds when ride is accepted with details
+      stopAllNotificationSounds();
       
       // Set current ride request in location tracking service
       locationTrackingService.setCurrentRideRequest(rideRequestWithDriverId);
@@ -335,11 +348,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setAcceptingRideId(null);
       setProcessedRideIds(new Set());
       
-      // Send driver status as online
-      socketManager.sendDriverStatus({
-        driverId,
-        status: 'online'
-      });
+      // Don't automatically set driver status to online after cancellation
+      // Let the driver manually choose when to go online
+      console.log('🚫 Driver status not automatically reset after cancellation - manual action required');
       
       // Show success message
       Alert.alert('Ride Cancelled', data.message || 'Ride cancelled successfully');
@@ -549,6 +560,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== rideRequest.rideId));
     
+    // Stop notification sounds when ride is accepted
+    stopAllNotificationSounds();
+    
     // Set a timeout to reset accepting state if no response is received
     setTimeout(() => {
       setAcceptingRideId(null);
@@ -564,6 +578,9 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
     
     setCurrentRideRequests((prev) => prev.filter(r => r.rideId !== rideRequest.rideId));
+    
+    // Stop notification sounds when ride is rejected
+    stopAllNotificationSounds();
   };
 
   const sendLocationUpdate = (data: { latitude: number; longitude: number; userId: string; driverId: string }) => {
@@ -612,12 +629,17 @@ export const OnlineStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Clear current ride request from location tracking service
     locationTrackingService.setCurrentRideRequest(null);
     
+    // Stop notification sounds when resetting driver status
+    stopAllNotificationSounds();
+    
     // Send driver status as online
     socketManager.sendDriverStatus({
       driverId,
       status: 'online'
     });
   };
+
+
 
   return (
     <OnlineStatusContext.Provider value={{ 

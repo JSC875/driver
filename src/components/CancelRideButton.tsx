@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CancelRideModal from './CancelRideModal';
 import socketManager from '../utils/socket';
 import { useOnlineStatus } from '../store/OnlineStatusContext';
+import { stopAllNotificationSounds } from './RideRequestScreen';
 
 interface CancelRideButtonProps {
   rideId: string;
@@ -43,6 +44,13 @@ export default function CancelRideButton({
         driverId,
         reason,
       });
+
+      // Stop notification sounds when cancelling ride
+      await stopAllNotificationSounds();
+
+      // Set driver offline to prevent receiving new ride requests immediately
+      // Note: This will be handled by the parent component that uses this button
+      console.log('🚫 Driver cancelling ride - should be set offline by parent');
 
       // Emit Socket.IO event to cancel ride
       socketManager.cancelRide({
