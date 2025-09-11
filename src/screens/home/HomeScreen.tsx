@@ -529,6 +529,12 @@ export default function HomeScreen() {
       return;
     }
 
+    // Don't fetch if already loaded
+    if (hasLoaded) {
+      console.log('🚗 Ride history already loaded, skipping...');
+      return;
+    }
+
     rideHistoryLoadingRef.current = true;
     console.log('🚗 Loading ride history...');
     
@@ -536,35 +542,25 @@ export default function HomeScreen() {
       const token = await getToken({ template: 'driver_app_token' });
       if (token) {
         await fetchRideHistory(token);
+      } else {
+        console.error('❌ No authentication token available for ride history');
       }
     } catch (error) {
-      console.error('Failed to fetch ride history:', error);
+      console.error('❌ Failed to fetch ride history:', error);
     } finally {
       rideHistoryLoadingRef.current = false;
     }
-  }, [getToken, fetchRideHistory]);
+  }, [getToken, fetchRideHistory, hasLoaded]);
 
   // Only fetch on mount if not already loaded
   useEffect(() => {
     if (!hasLoaded) {
       loadRideHistory();
     }
-  }, [loadRideHistory, hasLoaded]);
+  }, [hasLoaded]); // Remove loadRideHistory from dependencies to prevent infinite loops
 
-
-
-  // Refresh ride history when screen comes into focus (with debounce)
-  const lastFocusTime = useRef(0);
-  useFocusEffect(
-    React.useCallback(() => {
-      const now = Date.now();
-      // Only refresh if it's been more than 5 seconds since last focus
-      if (now - lastFocusTime.current > 5000) {
-        lastFocusTime.current = now;
-        loadRideHistory();
-      }
-    }, [loadRideHistory])
-  );
+  // Remove the useFocusEffect that was causing repeated API calls
+  // The ride history will only be loaded once when the component mounts
 
   // Swipe gesture state - REMOVED (no more map swiping)
 
@@ -1026,11 +1022,15 @@ export default function HomeScreen() {
     };
   }
 
-  const handleAcceptRide = (ride: BackendRideRequest) => {
+  const handleAcceptRide = async (ride: BackendRideRequest) => {
+    // Stop the notification sound immediately when accepting a ride
+    await stopAllNotificationSounds();
     acceptRide(ride);
   };
 
-  const handleRejectRide = (ride: BackendRideRequest) => {
+  const handleRejectRide = async (ride: BackendRideRequest) => {
+    // Stop the notification sound immediately when rejecting a ride
+    await stopAllNotificationSounds();
     rejectRide(ride);
   };
 
@@ -1101,6 +1101,14 @@ export default function HomeScreen() {
     }
   }, [rideRequest]);
 
+  // Clear local ride request when driver goes offline
+  useEffect(() => {
+    if (!isOnline && rideRequest) {
+      console.log('🔇 Driver went offline, clearing local ride request to prevent sound');
+      setRideRequest(null);
+    }
+  }, [isOnline, rideRequest]);
+
   // Type guard for address object
   function hasAddress(obj: any): obj is { address: string } {
     return obj && typeof obj === 'object' && typeof obj.address === 'string';
@@ -1158,6 +1166,7 @@ export default function HomeScreen() {
         console.log('pickupDetails for map:', localRideRequest.pickupDetails);
         console.log('dropoffDetails for map:', localRideRequest.dropoffDetails);
         if (isMounted) {
+          console.log('🔊 Setting ride request - will trigger sound');
           setRideRequest(localRideRequest);
           // Play haptic feedback for new ride request
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1906,6 +1915,8 @@ export default function HomeScreen() {
       </View>
         </SafeAreaView>
       )}
+      
+      
       {/* SOS Button (show only when online) */}
       {isOnline && (
         <Animated.View style={{
@@ -1960,7 +1971,7 @@ export default function HomeScreen() {
               handleRejectRide(currentRideRequest);
             }
           }}
-          playSound={!acceptedRideDetails} // Only play sound for new requests
+          playSound={!acceptedRideDetails} // Only play sound if no ride is currently accepted
         />
       )}
       {/* Dual notification card UI */}
@@ -2003,6 +2014,7 @@ export default function HomeScreen() {
                   onClose={handleReject}
                   onAccept={handleAccept}
                   onReject={handleReject}
+                  playSound={false}
                 />
               </View>
             );

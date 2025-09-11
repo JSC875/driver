@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Polyline from '@mapbox/polyline';
-import { RideRequest } from '../../components/RideRequestScreen';
+import { RideRequest, stopAllNotificationSounds } from '../../components/RideRequestScreen';
 import socketManager from '../../utils/socket';
 import LocationTrackingService from '../../services/locationTrackingService';
 import CancelRideButton from '../../components/CancelRideButton';
@@ -232,7 +232,7 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
   };
 
   // Function to cancel the ride
-  const handleCancelRide = () => {
+  const handleCancelRide = async () => {
     Alert.alert(
       'Cancel Ride',
       'Are you sure you want to cancel this ride? This action cannot be undone.',
@@ -241,12 +241,15 @@ export default function NavigationScreen({ route, navigation }: NavigationScreen
         { 
           text: 'Cancel Ride', 
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             console.log('🚫 Driver cancelling ride during pickup:', {
               rideId: ride.rideId,
               driverId: ride.driverId,
               reason: 'Driver cancelled during pickup'
             });
+            
+            // Stop notification sounds when cancelling ride
+            await stopAllNotificationSounds();
             
             // Send cancellation to server
             socketManager.cancelRide({

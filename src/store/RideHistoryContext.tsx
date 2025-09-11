@@ -29,8 +29,8 @@ interface RideHistoryContextType {
   hasLoaded: boolean;
   addRide: (ride: RideHistoryItem) => void;
   clearHistory: () => void;
-  fetchRideHistory: () => Promise<void>;
-  refreshRideHistory: () => Promise<void>;
+  fetchRideHistory: (token?: string) => Promise<void>;
+  refreshRideHistory: (token?: string) => Promise<void>;
 }
 
 const RideHistoryContext = createContext<RideHistoryContextType | undefined>(undefined);
@@ -71,7 +71,7 @@ export const RideHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const refreshRideHistory = useCallback(async (token?: string) => {
     console.log('🔄 Refreshing ride history...');
-    setHasLoaded(false); // Reset the loaded flag to allow refresh
+    // Don't reset hasLoaded flag - just fetch directly
     await fetchRideHistory(token);
   }, [fetchRideHistory]);
 
