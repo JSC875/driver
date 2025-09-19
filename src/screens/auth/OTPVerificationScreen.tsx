@@ -11,6 +11,7 @@ import {
   Animated, // <-- Add Animated import
   Easing,
   BackHandler, // Add BackHandler import
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,7 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const scaleAnims = useRef(otp.map(() => new Animated.Value(1))).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const [clipboardContent, setClipboardContent] = useState<string>('');
 
   // Animate scale when focused
   const handleFocus = (index: number) => {
@@ -80,8 +82,125 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
     return () => backHandler.remove();
   }, []);
 
+  // Check clipboard content on component mount and when screen comes into focus
+  useEffect(() => {
+    const checkClipboard = async () => {
+      try {
+        const content = await Clipboard.getString();
+        setClipboardContent(content);
+      } catch (error) {
+        console.log('Error reading clipboard:', error);
+      }
+    };
+
+    checkClipboard();
+  }, []);
+
+  // Function to handle paste operation
+  const handlePaste = async () => {
+    try {
+      const content = await Clipboard.getString();
+      console.log('Clipboard content:', content);
+      
+      // Extract OTP from clipboard content (look for 6-digit number)
+      const otpMatch = content.match(/\b\d{6}\b/);
+      if (otpMatch) {
+        const otpString = otpMatch[0];
+        console.log('Extracted OTP:', otpString);
+        
+        // Split OTP into individual digits
+        const otpArray = otpString.split('').slice(0, 6);
+        const newOtp = [...otp];
+        
+        // Fill the OTP array
+        for (let i = 0; i < otpArray.length; i++) {
+          if (i < 6) {
+            newOtp[i] = otpArray[i];
+          }
+        }
+        
+        setOtp(newOtp);
+        
+        // Focus the last filled input
+        const lastFilledIndex = Math.min(otpArray.length - 1, 5);
+        inputRefs.current[lastFilledIndex]?.focus();
+        
+        // Animate all filled inputs
+        otpArray.forEach((_, idx) => {
+          if (idx < 6) {
+            Animated.sequence([
+              Animated.spring(scaleAnims[idx], {
+                toValue: 1.25,
+                useNativeDriver: true,
+                friction: 2,
+              }),
+              Animated.spring(scaleAnims[idx], {
+                toValue: 1.15,
+                useNativeDriver: true,
+                friction: 4,
+              }),
+            ]).start();
+          }
+        });
+        
+        // Show success feedback
+        Alert.alert('Success', 'OTP pasted successfully!');
+      } else {
+        Alert.alert('No OTP Found', 'No 6-digit OTP found in clipboard. Please copy the OTP and try again.');
+      }
+    } catch (error) {
+      console.error('Error pasting OTP:', error);
+      Alert.alert('Error', 'Failed to paste OTP. Please try again.');
+    }
+  };
+
+
   // Animate bounce on digit entry
   const handleOtpChange = (value: string, index: number) => {
+    // Handle auto-fill or paste of complete OTP
+    if (value.length > 1) {
+      // If multiple characters are entered (auto-fill or paste), split them
+      const otpArray = value.split('').slice(0, 6);
+      const newOtp = [...otp];
+      
+      for (let i = 0; i < otpArray.length; i++) {
+        if (i < 6) {
+          newOtp[i] = otpArray[i];
+        }
+      }
+      
+      setOtp(newOtp);
+      
+      // Focus the last filled input or the next empty one
+      const lastFilledIndex = Math.min(otpArray.length - 1, 5);
+      inputRefs.current[lastFilledIndex]?.focus();
+      
+      // Animate all filled inputs
+      otpArray.forEach((_, idx) => {
+        if (idx < 6) {
+          Animated.sequence([
+            Animated.spring(scaleAnims[idx], {
+              toValue: 1.25,
+              useNativeDriver: true,
+              friction: 2,
+            }),
+            Animated.spring(scaleAnims[idx], {
+              toValue: 1.15,
+              useNativeDriver: true,
+              friction: 4,
+            }),
+          ]).start();
+        }
+      });
+      
+      // Show success feedback for paste operation
+      if (Platform.OS === 'android') {
+        Alert.alert('Success', 'OTP pasted successfully!');
+      }
+      
+      return;
+    }
+    
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
@@ -390,10 +509,28 @@ export default function OTPVerificationScreen({ navigation, route }: any) {
                     textAlign="center"
                     onFocus={() => handleFocus(index)}
                     onBlur={() => handleBlur(index)}
+                    autoComplete="sms-otp"
+                    textContentType="oneTimeCode"
+                    autoFocus={index === 0}
+                    contextMenuHidden={Platform.OS === 'android' ? false : true}
                   />
                 </Animated.View>
               ))}
             </Animated.View>
+            
+            {/* Paste Button for Android */}
+            {Platform.OS === 'android' && (
+              <View style={styles.copyPasteContainer}>
+                <TouchableOpacity
+                  style={[styles.copyPasteButton, styles.pasteButton]}
+                  onPress={handlePaste}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="clipboard-outline" size={20} color="#fff" />
+                  <Text style={styles.copyPasteButtonText}>Paste OTP</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={styles.resendContainer}>
@@ -470,9 +607,34 @@ const styles = StyleSheet.create({
     marginTop: Layout.spacing.sm,
   },
   otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Layout.spacing.lg,
+  },
+  copyPasteContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: Layout.spacing.md,
+  },
+  copyPasteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Layout.spacing.md,
+    paddingVertical: Layout.spacing.sm,
+    borderRadius: Layout.borderRadius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pasteButton: {
+    backgroundColor: Colors.primary,
+  },
+  copyPasteButtonText: {
+    color: '#fff',
+    fontSize: Layout.fontSize.sm,
+    fontWeight: '600',
+    marginLeft: Layout.spacing.xs,
   },
   otpInput: {
     width: 50,

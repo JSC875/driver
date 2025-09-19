@@ -56,7 +56,7 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
   const [isAccepting, setIsAccepting] = useState(false);
   const [hasError, setHasError] = useState(false);
   const unavailableTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { driverId } = useOnlineStatus();
+  const { driverId, isOnline } = useOnlineStatus();
   
   // Add debug logging for component mount
   useEffect(() => {
@@ -70,9 +70,44 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
 
   const stopAudio = async () => {
     if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+        console.log('🔇 Audio stopped and unloaded');
+      } catch (error) {
+        console.error('❌ Error stopping audio:', error);
+      }
+    }
+  };
+
+  // Test function to manually trigger sound
+  const testSound = async () => {
+    console.log('🧪 Testing sound manually...');
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('⚠️ Audio permission not granted, requesting...');
+        const { status: newStatus } = await Audio.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.error('❌ Audio permission denied');
+          return;
+        }
+      }
+      
+      const { sound } = await Audio.Sound.createAsync(
+        require('../../assets/sounds/Ubersound.mp3'),
+        { shouldPlay: true, isLooping: false }
+      );
+      soundRef.current = sound;
+      console.log('🎵 Test sound loaded and playing');
+      
+      // Stop after 3 seconds
+      setTimeout(async () => {
+        await stopAudio();
+      }, 3000);
+    } catch (e) {
+      console.error('❌ Error playing test sound:', e);
     }
   };
 
@@ -82,6 +117,24 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
 
   useEffect(() => {
     console.log('🎯 Setting up socket listeners for ride:', ride.id);
+    
+    // Initialize audio settings
+    const initializeAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        console.log('🔊 Audio mode initialized successfully');
+      } catch (error) {
+        console.error('❌ Error initializing audio mode:', error);
+      }
+    };
+    
+    initializeAudio();
     
     // Handle ride accept errors (e.g., ride already taken)
     const handleRideAcceptError = (data: { message: string }) => {
@@ -167,21 +220,41 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
         }),
       ])
     ).start();
-    // Play sound and vibrate only if playSound is true
-    if (playSound) {
+    // Play sound and vibrate only if playSound is true AND driver is online
+    if (playSound && isOnline) {
+      console.log('🔊 Playing notification sound for ride request');
       (async () => {
         try {
+          // Check audio permissions first
+          const { status } = await Audio.requestPermissionsAsync();
+          if (status !== 'granted') {
+            console.log('⚠️ Audio permission not granted, requesting...');
+            const { status: newStatus } = await Audio.requestPermissionsAsync();
+            if (newStatus !== 'granted') {
+              console.error('❌ Audio permission denied');
+              return;
+            }
+          }
+          
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          console.log('📳 Haptic feedback triggered');
+          
           // Load and play audio in loop
+          console.log('📁 Loading audio file from: ../../assets/sounds/Ubersound.mp3');
           const { sound } = await Audio.Sound.createAsync(
             require('../../assets/sounds/Ubersound.mp3'),
             { shouldPlay: true, isLooping: true }
           );
           soundRef.current = sound;
+          console.log('🎵 Audio loaded and playing successfully');
         } catch (e) {
-          console.log('Error playing audio:', e);
+          console.error('❌ Error playing audio:', e);
         }
       })();
+    } else if (!isOnline) {
+      console.log('🔇 Sound disabled - driver is offline');
+    } else {
+      console.log('🔇 Sound disabled for this ride request');
     }
     return () => {
       acceptAnim.stopAnimation();
@@ -190,7 +263,7 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
         soundRef.current = null;
       }
     };
-  }, [playSound]);
+  }, [playSound, isOnline]);
 
   const handleAcceptPress = async () => {
     if (isAccepting || hasError) return;
@@ -212,6 +285,10 @@ const RideRequestScreen = ({ ride, onClose, onAccept, onReject, playSound = true
           onClose();
         }} style={{ position: 'absolute', top: 18, right: 18, zIndex: 10, backgroundColor: '#f6f6f6', borderRadius: 18, padding: 6 }}>
           <Ionicons name="close" size={26} color="#888" />
+        </TouchableOpacity>
+        {/* Test Sound Button - Remove in production */}
+        <TouchableOpacity onPress={testSound} style={{ position: 'absolute', top: 18, left: 18, zIndex: 10, backgroundColor: '#007AFF', borderRadius: 18, padding: 6 }}>
+          <Ionicons name="volume-high" size={26} color="#fff" />
         </TouchableOpacity>
         {/* Top Pills */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, marginTop: 2 }}>

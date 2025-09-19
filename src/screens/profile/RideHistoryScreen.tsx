@@ -70,7 +70,7 @@ export default function RideHistoryScreen({ navigation }: any) {
     } else {
       console.log('📱 Ride history already loaded, skipping API call');
     }
-  }, [hasLoaded]); // Only depend on hasLoaded to prevent multiple calls
+  }, []); // Only run once on mount, don't depend on hasLoaded
 
   // Filter and sort rides (latest first)
   const filteredRides = rides
